@@ -1,6 +1,5 @@
 #pragma once
 
-#include "demu/hal/axifull/signals.hh"
 #ifdef ENABLE_SYSTEM
 #include "./hal/hal.hh"
 #include "./trace.hh"

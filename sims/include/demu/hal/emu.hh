@@ -29,6 +29,8 @@ public:
   virtual const char *name() const noexcept {
     return "Unknown Emulated Hardware";
   }
+
+  virtual void dump(addr_t start, size_t size) const noexcept {}
 };
 
 } // namespace demu::hal

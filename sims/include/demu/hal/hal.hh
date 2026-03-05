@@ -9,8 +9,3 @@
 #include "./axilite/memory.hh"
 #include "./axilite/signals.hh"
 #include "./axilite/slave.hh"
-
-// AXI4-Full
-#include "./axifull/memory.hh"
-#include "./axifull/signals.hh"
-#include "./axifull/slave.hh"
