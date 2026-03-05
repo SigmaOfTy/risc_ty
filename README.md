@@ -2,6 +2,10 @@
 
 ###### NOTE: THIS REPO IS STILL UNDER DEVELOPMENT.
 
+## Documentation
+
+Check website (here)[https://risc-dashygo097s-projects.vercel.app]
+
 ## Acknowledgememt
 
 - [chisel](https://github.com/chipsalliance/chisel)
