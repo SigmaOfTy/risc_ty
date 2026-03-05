@@ -6,11 +6,11 @@ namespace demu::hal::axi {
 
 AXILiteMemory::AXILiteMemory(size_t size, addr_t base_addr, size_t read_delay,
                              size_t write_delay)
-    : _memory(std::make_unique<Memory>(size, base_addr)),
-      _read_delay(read_delay), _write_delay(write_delay) {}
+    : memory_(std::make_unique<Memory>(size, base_addr)),
+      read_delay_(read_delay), write_delay_(write_delay) {}
 
 void AXILiteMemory::reset() {
-  _memory->clear();
+  memory_->clear();
 
   // Clear all queues
   _write_addr_queue = {};
@@ -34,20 +34,20 @@ void AXILiteMemory::process_writes() {
     _write_data_queue.pop();
 
     const bool addr_valid =
-        _memory->is_valid_addr(addr) && _memory->is_valid_addr(addr + 3);
+        memory_->is_valid_addr(addr) && memory_->is_valid_addr(addr + 3);
 
     if (addr_valid) {
       for (int i = 0; i < 4; ++i) {
         if (wdata.strb & (1 << i)) {
           const byte_t byte_val =
               static_cast<byte_t>((wdata.data >> (i * 8)) & 0xFF);
-          _memory->write_byte(addr + i, byte_val);
+          memory_->write_byte(addr + i, byte_val);
         }
       }
     }
 
     uint8_t resp = addr_valid ? 0u : 2u; // OKAY or SLVERR
-    _write_resp_queue.push({resp, _write_delay});
+    _write_resp_queue.push({resp, write_delay_});
   }
 }
 
@@ -58,10 +58,10 @@ void AXILiteMemory::process_reads() {
     if (read_trans.delay > 0) {
       read_trans.delay--;
     } else {
-      const bool addr_valid = _memory->is_valid_addr(read_trans.addr) &&
-                              _memory->is_valid_addr(read_trans.addr + 3);
+      const bool addr_valid = memory_->is_valid_addr(read_trans.addr) &&
+                              memory_->is_valid_addr(read_trans.addr + 3);
 
-      read_trans.data = addr_valid ? _memory->read_word(read_trans.addr) : 0;
+      read_trans.data = addr_valid ? memory_->read_word(read_trans.addr) : 0;
       read_trans.processed = true;
     }
   }
@@ -103,7 +103,7 @@ uint8_t AXILiteMemory::b_resp() const noexcept {
 
 // AR
 void AXILiteMemory::ar_valid(addr_t addr) {
-  _read_queue.push({addr, 0, false, _read_delay});
+  _read_queue.push({addr, 0, false, read_delay_});
 }
 
 bool AXILiteMemory::ar_ready() const noexcept { return true; }
@@ -140,7 +140,7 @@ void AXILiteMemory::dump(addr_t start, size_t size) const noexcept {
   HAL_INFO("Memory dump [0x{:08X} - 0x{:08X}]:", static_cast<uint64_t>(start),
            static_cast<uint64_t>(start + clamped));
 
-  const byte_t *ptr = _memory->get_ptr(start);
+  const byte_t *ptr = memory_->get_ptr(start);
   if (!ptr)
     return;
 
