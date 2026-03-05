@@ -1,4 +1,6 @@
 #include "demu/hal/axilite/memory.hh"
+#include <iomanip>
+#include <sstream>
 
 namespace demu::hal::axi {
 
@@ -123,6 +125,48 @@ word_t AXILiteMemory::r_data() const noexcept {
 
 uint8_t AXILiteMemory::r_resp() const noexcept {
   return 0; // OKAY
+}
+
+void AXILiteMemory::dump(addr_t start, size_t size) const noexcept {
+  if (!owns_address(start)) {
+    HAL_WARN("dump: start address 0x{:08X} not owned by this device", start);
+    return;
+  }
+  const addr_t owned_end = base_address() + address_range();
+  const size_t clamped = (start + size > owned_end)
+                             ? static_cast<size_t>(owned_end - start)
+                             : size;
+
+  HAL_INFO("Memory dump [0x{:08X} - 0x{:08X}]:", static_cast<uint64_t>(start),
+           static_cast<uint64_t>(start + clamped));
+
+  const byte_t *ptr = _memory->get_ptr(start);
+  if (!ptr)
+    return;
+
+  for (size_t i = 0; i < clamped; i += 16) {
+    std::stringstream ss;
+    ss << std::hex << std::setw(8) << std::setfill('0') << (start + i) << ": ";
+
+    for (size_t j = 0; j < 16; ++j) {
+      if (i + j < clamped)
+        ss << std::hex << std::setw(2) << std::setfill('0')
+           << static_cast<int>(ptr[i + j]) << ' ';
+      else
+        ss << "   ";
+      if (j == 7)
+        ss << ' ';
+    }
+
+    ss << " |";
+    for (size_t j = 0; j < 16 && (i + j) < clamped; ++j) {
+      const byte_t c = ptr[i + j];
+      ss << static_cast<char>((c >= 32 && c < 127) ? c : '.');
+    }
+    ss << '|';
+
+    HAL_INFO("{}", ss.str());
+  }
 }
 
 } // namespace demu::hal::axi

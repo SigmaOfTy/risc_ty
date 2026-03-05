@@ -63,7 +63,7 @@ void CPUSimulator::reset() {
   dut_->reset = 0;
   dut_->eval();
 
-  instrCount = 0;
+  _instr_count = 0;
   terminate_ = false;
   _register_values.clear();
   trace_->clear();
@@ -194,7 +194,7 @@ void CPUSimulator::clock_tick() {
 
 #ifdef ENABLE_TRACE
   if (vcd_) {
-    vcd_->dump(timeCount++);
+    vcd_->dump(_time_count++);
   }
 #endif
 
@@ -232,7 +232,7 @@ void CPUSimulator::clock_tick() {
   }
 
   if (dut_->debug_wb_instr != BUBBLE) {
-    instrCount++;
+    _instr_count++;
     Instruction inst(static_cast<instr_t>(dut_->debug_wb_instr));
     DEMU_INFO("RETIRE | Cycle {:6d} | PC=0x{:08x} | Inst=0x{:08x} ({})",
               cycle_count(), static_cast<addr_t>(dut_->debug_pc),
@@ -246,7 +246,7 @@ void CPUSimulator::clock_tick() {
 
 #ifdef ENABLE_TRACE
   if (vcd_) {
-    vcd_->dump(timeCount++);
+    vcd_->dump(_time_count++);
   }
 #endif
 }

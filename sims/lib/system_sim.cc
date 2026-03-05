@@ -129,7 +129,14 @@ void SystemSimulator::run(uint64_t max_cycles) {
 }
 
 void SystemSimulator::dump_memory(addr_t start, size_t size) const {
-  _device_manager->dump_memory(start, size);
+  const auto *slave = _device_manager->find_slave_for_address(start);
+
+  if (!slave) {
+    HAL_WARN("dump_memory: no device owns address 0x{:08X}", start);
+    return;
+  }
+
+  slave->dump(start, size);
 }
 
 void SystemSimulator::check_termination() {}

@@ -67,6 +67,8 @@ public:
     return "AXILite Memory";
   }
 
+  void dump(addr_t start, size_t size) const noexcept override;
+
 private:
   struct WriteData {
     word_t data;
