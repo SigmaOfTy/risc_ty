@@ -5,49 +5,49 @@ namespace demu::hal {
 
 // Slave Retrieval — by port
 EmulatedHardware *DeviceManager::get_slave(port_id_t port) noexcept {
-  if (port >= _slots.size())
+  if (port >= slots_.size())
     return nullptr;
-  return _slots[port].device.get();
+  return slots_[port].device.get();
 }
 
 const EmulatedHardware *
 DeviceManager::get_slave(port_id_t port) const noexcept {
-  if (port >= _slots.size())
+  if (port >= slots_.size())
     return nullptr;
-  return _slots[port].device.get();
+  return slots_[port].device.get();
 }
 
 // Slave Retrieval — by name
 EmulatedHardware *
 DeviceManager::get_slave_by_name(std::string_view name) noexcept {
-  auto it = _name_index.find(std::string(name));
-  if (it == _name_index.end())
+  auto it = name_indices_.find(std::string(name));
+  if (it == name_indices_.end())
     return nullptr;
   return get_slave(it->second);
 }
 
 const EmulatedHardware *
 DeviceManager::get_slave_by_name(std::string_view name) const noexcept {
-  auto it = _name_index.find(std::string(name));
-  if (it == _name_index.end())
+  auto it = name_indices_.find(std::string(name));
+  if (it == name_indices_.end())
     return nullptr;
   return get_slave(it->second);
 }
 
 // Slave Retrieval — by address
 EmulatedHardware *DeviceManager::find_slave_for_address(addr_t addr) noexcept {
-  if (_addr_index.empty())
+  if (addr_indices_.empty())
     return nullptr;
 
-  auto it = _addr_index.upper_bound(addr);
-  if (it == _addr_index.begin())
+  auto it = addr_indices_.upper_bound(addr);
+  if (it == addr_indices_.begin())
     return nullptr;
 
   --it;
   auto *slave = get_slave(it->second);
   if (slave && slave->owns_address(addr)) {
     HAL_TRACE("Address 0x{:08X} mapped to slave '{}' (Port {})", addr,
-              _slots[it->second].name, it->second);
+              slots_[it->second].name, it->second);
     return slave;
   }
 
@@ -57,18 +57,18 @@ EmulatedHardware *DeviceManager::find_slave_for_address(addr_t addr) noexcept {
 
 const EmulatedHardware *
 DeviceManager::find_slave_for_address(addr_t addr) const noexcept {
-  if (_addr_index.empty())
+  if (addr_indices_.empty())
     return nullptr;
 
-  auto it = _addr_index.upper_bound(addr);
-  if (it == _addr_index.begin())
+  auto it = addr_indices_.upper_bound(addr);
+  if (it == addr_indices_.begin())
     return nullptr;
 
   --it;
   const auto *slave = get_slave(it->second);
   if (slave && slave->owns_address(addr)) {
     HAL_TRACE("Address 0x{:08X} mapped to slave '{}' (Port {})", addr,
-              _slots[it->second].name, it->second);
+              slots_[it->second].name, it->second);
     return slave;
   }
   return nullptr;
@@ -78,13 +78,13 @@ DeviceManager::find_slave_for_address(addr_t addr) const noexcept {
 void DeviceManager::register_handler(port_id_t port,
                                      std::unique_ptr<PortHandler> handler) {
   ensure_capacity(port);
-  _slots[port].handler = std::move(handler);
+  slots_[port].handler = std::move(handler);
   HAL_DEBUG("Registered '{}' handler on Port {}",
-            _slots[port].handler->protocol_name(), port);
+            slots_[port].handler->protocol_name(), port);
 }
 
 void DeviceManager::handle_ports() noexcept {
-  for (auto &slot : _slots) {
+  for (auto &slot : slots_) {
     if (slot.device && slot.handler)
       slot.handler->handle(slot.device.get());
   }
@@ -93,14 +93,14 @@ void DeviceManager::handle_ports() noexcept {
 // Bulk Operations
 void DeviceManager::reset() noexcept {
   HAL_DEBUG("Resetting all emulated hardware devices...");
-  for (auto &slot : _slots) {
+  for (auto &slot : slots_) {
     if (slot.device)
       slot.device->reset();
   }
 }
 
 void DeviceManager::clock_tick() noexcept {
-  for (auto &slot : _slots) {
+  for (auto &slot : slots_) {
     if (slot.device)
       slot.device->clock_tick();
   }
@@ -108,22 +108,22 @@ void DeviceManager::clock_tick() noexcept {
 
 // Informational
 bool DeviceManager::has_slave_at(port_id_t port) const noexcept {
-  return port < _slots.size() && _slots[port].device != nullptr;
+  return port < slots_.size() && slots_[port].device != nullptr;
 }
 
 std::optional<std::string_view>
 DeviceManager::get_slave_name(port_id_t port) const noexcept {
   if (!has_slave_at(port))
     return std::nullopt;
-  return std::string_view(_slots[port].name);
+  return std::string_view(slots_[port].name);
 }
 
 void DeviceManager::dump_device_map() const {
   HAL_INFO("--- Device Map Summary ---");
   HAL_INFO("Active Slaves: {} / {} ports", active_slave_count(), port_count());
 
-  for (const auto &[base, port] : _addr_index) {
-    const auto &slot = _slots[port];
+  for (const auto &[base, port] : addr_indices_) {
+    const auto &slot = slots_[port];
     const addr_t range = slot.device->address_range();
     const addr_t end = base + range - 1;
 
@@ -134,27 +134,27 @@ void DeviceManager::dump_device_map() const {
 }
 
 void DeviceManager::ensure_capacity(port_id_t port) {
-  if (port >= _slots.size()) {
-    _slots.resize(static_cast<size_t>(port) + 1);
+  if (port >= slots_.size()) {
+    slots_.resize(static_cast<size_t>(port) + 1);
   }
 }
 
 void DeviceManager::rebuild_indices_for(port_id_t port) {
-  auto &slot = _slots[port];
+  auto &slot = slots_[port];
   if (!slot.device)
     return;
 
-  _name_index[slot.name] = port;
-  _addr_index[slot.device->base_address()] = port;
+  name_indices_[slot.name] = port;
+  addr_indices_[slot.device->base_address()] = port;
 }
 
 void DeviceManager::remove_indices_for(port_id_t port) {
-  auto &slot = _slots[port];
+  auto &slot = slots_[port];
   if (!slot.device)
     return;
 
-  _name_index.erase(slot.name);
-  _addr_index.erase(slot.device->base_address());
+  name_indices_.erase(slot.name);
+  addr_indices_.erase(slot.device->base_address());
 }
 
 } // namespace demu::hal

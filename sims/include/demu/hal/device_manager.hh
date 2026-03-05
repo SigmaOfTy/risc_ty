@@ -68,9 +68,9 @@ public:
   void clock_tick() noexcept;
 
   // Informational
-  [[nodiscard]] size_t port_count() const noexcept { return _slots.size(); }
+  [[nodiscard]] size_t port_count() const noexcept { return slots_.size(); }
   [[nodiscard]] size_t active_slave_count() const noexcept {
-    return _name_index.size();
+    return name_indices_.size();
   }
   [[nodiscard]] bool has_slave_at(port_id_t port) const noexcept;
   [[nodiscard]] std::optional<std::string_view>
@@ -86,9 +86,9 @@ private:
   };
 
   // components
-  std::vector<SlaveSlot> _slots;
-  std::unordered_map<std::string, port_id_t> _name_index;
-  std::map<addr_t, port_id_t> _addr_index;
+  std::vector<SlaveSlot> slots_;
+  std::unordered_map<std::string, port_id_t> name_indices_;
+  std::map<addr_t, port_id_t> addr_indices_;
 
   // helpers
   void ensure_capacity(port_id_t port);
@@ -104,7 +104,7 @@ T *DeviceManager::register_slave(port_id_t port, std::string_view name,
 
   ensure_capacity(port);
 
-  if (_slots[port].device) {
+  if (slots_[port].device) {
     remove_indices_for(port);
   }
 
@@ -112,8 +112,8 @@ T *DeviceManager::register_slave(port_id_t port, std::string_view name,
     auto slave = std::make_unique<T>(std::forward<Args>(args)...);
     T *ptr = slave.get();
 
-    _slots[port].device = std::move(slave);
-    _slots[port].name = std::string(name);
+    slots_[port].device = std::move(slave);
+    slots_[port].name = std::string(name);
 
     rebuild_indices_for(port);
 
