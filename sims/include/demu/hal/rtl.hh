@@ -7,7 +7,7 @@ using namespace isa;
 
 template <typename DUT> class RTLHardware {
 public:
-  RTLHardware() : _dut(std::make_unique<DUT>()) { _dut->eval(); }
+  RTLHardware() : dut_(std::make_unique<DUT>()) { dut_->eval(); }
   virtual ~RTLHardware() = default;
 
   virtual addr_t base_address() const noexcept = 0;
@@ -30,7 +30,7 @@ public:
   virtual const char *name() const noexcept { return "Unknown RTL Hardware"; }
 
 protected:
-  std::unique_ptr<DUT> _dut;
+  std::unique_ptr<DUT> dut_;
 };
 
 } // namespace demu::hal

@@ -17,10 +17,10 @@ public:
   ~AXILiteMemory() override = default;
 
   [[nodiscard]] addr_t base_address() const noexcept override {
-    return _memory->base_address();
+    return memory_->base_address();
   }
   [[nodiscard]] size_t address_range() const noexcept override {
-    return _memory->size();
+    return memory_->size();
   }
 
   void reset() override;
@@ -51,16 +51,16 @@ public:
 
   // Bypass Methods
   bool load_binary(const std::string &filename, addr_t offset = 0) {
-    return _memory->load_binary(filename, offset);
+    return memory_->load_binary(filename, offset);
   };
-  void read_delay(size_t cycles) { _read_delay = cycles; };
-  void write_delay(size_t cycles) { _write_delay = cycles; };
+  void read_delay(size_t cycles) { read_delay_ = cycles; };
+  void write_delay(size_t cycles) { write_delay_ = cycles; };
 
   [[nodiscard]] byte_t *get_ptr(addr_t offset = 0) {
-    return _memory->get_ptr(offset);
+    return memory_->get_ptr(offset);
   }
   [[nodiscard]] const byte_t *get_ptr(addr_t offset = 0) const {
-    return _memory->get_ptr(offset);
+    return memory_->get_ptr(offset);
   };
 
   [[nodiscard]] const char *name() const noexcept override {
@@ -70,6 +70,11 @@ public:
   void dump(addr_t start, size_t size) const noexcept override;
 
 private:
+  // components
+  std::unique_ptr<Memory> memory_;
+  size_t read_delay_;
+  size_t write_delay_;
+
   struct WriteData {
     word_t data;
     byte_t strb;
@@ -91,11 +96,6 @@ private:
   void process_writes();
   void process_reads();
   void update_delays();
-
-  // Components
-  std::unique_ptr<Memory> _memory;
-  size_t _read_delay;
-  size_t _write_delay;
 
   // Transaction queues for pipelined operation
   std::queue<addr_t> _write_addr_queue;
