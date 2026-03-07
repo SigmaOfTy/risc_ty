@@ -1,5 +1,12 @@
 # demu
-add_library(demu ${DEMU_SOURCES} ${DEMU_HEADERS})
+
+add_library(demu
+  ${DEMU_SOURCES}
+  ${DEMU_HEADERS}
+  "${PROTO_OUT}/risc_config.pb.cc"
+)
+
+add_dependencies(demu gen_proto)
 
 verilate(demu
   SOURCES ${CPU_RTL_SOURCE}
@@ -31,9 +38,10 @@ if(ENABLE_SYSTEM)
   )
 endif()
 
-target_include_directories(demu PUBLIC 
+target_include_directories(demu PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+  "${PROTO_OUT}"
 )
 
 set_target_properties(demu PROPERTIES
@@ -43,21 +51,17 @@ set_target_properties(demu PROPERTIES
 
 target_link_libraries(demu PUBLIC spdlog::spdlog)
 target_link_libraries(demu PUBLIC nlohmann_json::nlohmann_json)
-
-if(NOT DEFINED RTL_CONFIG_FILE)
-  set(RTL_CONFIG_FILE "${RTL_DIR}/config.json")
-endif()
-
-if(NOT EXISTS "${RTL_CONFIG_FILE}")
-  message(FATAL_ERROR 
-    "[demu] config.json not found at: ${RTL_CONFIG_FILE}\n"
-    "  Run 'sbt run' to generate it first, or set -DRTL_CONFIG_FILE=<path>"
-  )
-endif()
+target_link_libraries(demu PUBLIC
+  protobuf::libprotobuf
+  absl::log
+  absl::log_internal_message
+  absl::log_internal_check_op
+  absl::status
+  absl::strings
+)
 
 target_compile_definitions(demu PRIVATE
   RTL_DIR="${RTL_DIR}"
-  RTL_CONFIG_FILE="${RTL_CONFIG_FILE}"
+  RTL_CONFIG_FILE="${RTL_DIR}/config.json"
+  RTL_CONFIG_BIN="${RTL_DIR}/config.pb"
 )
-
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${RTL_CONFIG_FILE}")

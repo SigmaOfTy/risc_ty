@@ -2,20 +2,18 @@ BASE_DIR = $(shell pwd)
 BUILD_DIR = $(BASE_DIR)/build
 SCRIPTS_DIR = $(BASE_DIR)/scripts
 SIM_DIR = $(BASE_DIR)/sims
-TB_DIR = $(BASE_DIR)/testbenchs
 SYNTH_DIR = $(BASE_DIR)/synth
 
 LIB ?= arch 
 FZF ?= $(shell [ -x "$$(command -v fzf)" ] && echo true || echo false)
 STA_TOOL ?= yosys
 
-.PHONY: pre fmt build run clean update tb sta sta-yosys sta-vivado
+.PHONY: pre fmt build run clean update sta sta-yosys sta-vivado
 
 pre:
 	@mkdir -p $(BUILD_DIR)
 	@mkdir -p $(SIM_DIR)
 	@mkdir -p $(SYNTH_DIR)
-	@mkdir -p $(TB_DIR)
 
 fmt:
 	@scalafmt
@@ -28,20 +26,11 @@ run: pre
 
 clean:
 	@rm -rf $(SYNTH_DIR)
-	@rm -rf $(TB_DIR)/logs
-	@rm -rf $(TB_DIR)/build
 
 update:
 	@sbt clean bloopInstall
 	@sbt update
 	@sbt reload
-
-tb: pre
-	@if [ "$(FZF)" = "true" ] ; then \
-		FZF=true bash $(SCRIPTS_DIR)/tb.sh ; \
-	else \
-		bash $(SCRIPTS_DIR)/tb.sh ; \
-	fi
 
 sta-yosys: pre
 	@if [ "$(FZF)" = "true" ] ; then \

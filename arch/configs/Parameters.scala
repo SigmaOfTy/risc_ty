@@ -1,18 +1,5 @@
 package arch.configs
 
-abstract class Field[T] private (
-  val default: Option[T],
-  val section: Option[String]
-) {
-  def this() = this(None, None)
-  def this(default: T) = this(Some(default), None)
-  def this(default: T, section: String) = this(Some(default), Some(section))
-
-  def apply(): T = default.getOrElse(
-    throw new IllegalArgumentException(s"Field ${this} has no default value")
-  )
-}
-
 class Parameters(
   val site: Map[Any, Any],
   val up: Option[Parameters] = None,
