@@ -22,8 +22,8 @@ CPUSimulator::CPUSimulator(bool enable_trace) : trace_enabled_(enable_trace) {
   imem_ = std::make_unique<hal::MemoryAllocator>(imem_r->size, imem_r->base);
   dmem_ = std::make_unique<hal::MemoryAllocator>(dmem_r->size, dmem_r->base);
 
-  l1_icache_line_size_ = config_->l1i().line_words(sizeof(word_t));
-  l1_dcache_line_size_ = config_->l1d().line_words(sizeof(word_t));
+  l1_icache_line_size_ = config_->l1i_line_words();
+  l1_dcache_line_size_ = config_->l1d_line_words();
 };
 
 CPUSimulator::~CPUSimulator() {

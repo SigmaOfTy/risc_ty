@@ -19,7 +19,8 @@ ThisBuild / scalacOptions ++= Seq(
 
 lazy val arch = (project in file("arch"))
   .settings(
-    name := "arch",
+    name                      := "arch",
+    // chisel/vopts
     libraryDependencies ++= Seq(
       "dashygo097"        %% "utils"  % "0.1.0",
       "dashygo097"        %% "math"   % "0.1.0",
@@ -30,5 +31,15 @@ lazy val arch = (project in file("arch"))
     Compile / unmanagedSourceDirectories += baseDirectory.value,
     addCompilerPlugin(
       "org.chipsalliance" % "chisel-plugin" % chiselVersion cross CrossVersion.full
+    ),
+    // protobuf
+    Compile / PB.protoSources := Seq(baseDirectory.value / ".." / "proto"),
+    Compile / PB.targets      := Seq(
+      scalapb.gen(flatPackage = true) -> (Compile / sourceManaged).value / "scalapb"
+    ),
+    libraryDependencies ++= Seq(
+      "com.thesamet.scalapb" %% "scalapb-runtime"      % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "com.thesamet.scalapb" %% "scalapb-runtime-grpc" % scalapb.compiler.Version.scalapbVersion,
+      "com.thesamet.scalapb" %% "scalapb-json4s"       % "0.12.1",
     ),
   )
