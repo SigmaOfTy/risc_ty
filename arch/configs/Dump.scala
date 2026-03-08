@@ -1,7 +1,7 @@
 package arch.configs
 
 import proto._
-import arch.isa.ISAProto
+import arch.isa._
 import vopts.mem.cache._
 import scalapb.json4s.JsonFormat
 import java.nio.file.{ Files, Paths }
@@ -44,22 +44,6 @@ object RiscDump {
       ),
     )
 
-  def buildIsa(p: Parameters): Isa = {
-    val isaDef = arch.isa.ISADefinition
-      .fromString(p(ISA))
-      .getOrElse(
-        throw new Exception(s"Unknown ISA: ${p(ISA)}")
-      )
-    Isa(
-      name = p(ISA),
-      xlen = p(XLen),
-      ilen = p(ILen),
-      numArchRegs = p(NumArchRegs),
-      isBigEndian = p(IsBigEndian),
-      instrSet = Some(ISAProto.from(isaDef))
-    )
-  }
-
   def dump(
     p: Parameters,
     configPath: String,
@@ -75,14 +59,14 @@ object RiscDump {
     val cfg = buildConfig(p)
     writeJson(cfg, jsonPath)
     binPath.foreach(bp => writeBin(cfg.toByteArray, bp))
-    println(s"[ConfigDump] config → $jsonPath")
+    println(s"[RiscDump] config → $jsonPath")
   }
 
   def dumpIsa(p: Parameters, jsonPath: String, binPath: Option[String] = None): Unit = {
-    val isa = buildIsa(p)
+    val isa = IsaDef.toIsa(p(ISA))
     writeJson(isa, jsonPath)
     binPath.foreach(bp => writeBin(isa.toByteArray, bp))
-    println(s"[ConfigDump] isa    → $jsonPath")
+    println(s"[RiscDump] isa → $jsonPath")
   }
 
   private def writeJson(msg: scalapb.GeneratedMessage, path: String): Unit = {
