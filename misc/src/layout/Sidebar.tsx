@@ -1,13 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useLocation } from "react-router-dom";
-import {
-  FileText,
-  Cpu,
-  MemoryStick,
-  Code,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { FileText, Cpu, MemoryStick, Code } from "lucide-react";
 import navigationConfig from "@assets/config/navigation.json";
 import "@styles/layout/sidebar.css";
 
@@ -23,14 +16,13 @@ interface NavigationConfig {
 }
 
 const BREAKPOINT_MOBILE = 768;
-const BREAKPOINT_TABLET = 1024;
-const TRANSITION_DURATION_MS = 300;
+const SIDEBAR_DEFAULT_WIDTH = 280;
+const SIDEBAR_MIN_WIDTH = 160;
+const SIDEBAR_MAX_WIDTH = 480;
+const SIDEBAR_COLLAPSE_THRESHOLD = 80;
 
-function deriveState(width: number): { expanded: boolean; isMobile: boolean } {
-  return {
-    isMobile: width <= BREAKPOINT_MOBILE,
-    expanded: width > BREAKPOINT_TABLET,
-  };
+function deriveIsMobile(width: number): boolean {
+  return width <= BREAKPOINT_MOBILE;
 }
 
 const Sidebar: React.FC = () => {
@@ -38,63 +30,86 @@ const Sidebar: React.FC = () => {
   const config = navigationConfig as unknown as NavigationConfig;
 
   const initialWidth = typeof window !== "undefined" ? window.innerWidth : 1280;
-  const initial = deriveState(initialWidth);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(
+    deriveIsMobile(initialWidth) ? 0 : SIDEBAR_DEFAULT_WIDTH,
+  );
+  const [isMobile, setIsMobile] = useState<boolean>(
+    deriveIsMobile(initialWidth),
+  );
 
-  const [expanded, setExpanded] = useState<boolean>(initial.expanded);
-  const [isMobile, setIsMobile] = useState<boolean>(initial.isMobile);
-
-  const isMobileRef = useRef<boolean>(initial.isMobile);
-  const isTransitioning = useRef<boolean>(false);
-  const transitionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMobileRef = useRef<boolean>(deriveIsMobile(initialWidth));
+  const isDragging = useRef<boolean>(false);
+  const dragStartX = useRef<number>(0);
+  const dragStartWidth = useRef<number>(0);
 
   useEffect(() => {
     const ro = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? window.innerWidth;
-      const next = deriveState(width);
+      const mobile = deriveIsMobile(width);
       const wasMobile = isMobileRef.current;
-
-      isMobileRef.current = next.isMobile;
-      setIsMobile(next.isMobile);
-      setExpanded((prev) => {
-        if (next.isMobile) return false;
-        if (wasMobile && !next.isMobile) return next.expanded;
-        if (width > BREAKPOINT_TABLET) return prev;
-        return false;
-      });
+      isMobileRef.current = mobile;
+      setIsMobile(mobile);
+      if (mobile) {
+        setSidebarWidth(0);
+      } else if (wasMobile && !mobile) {
+        setSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+      }
     });
     ro.observe(document.documentElement);
     return () => ro.disconnect();
   }, []);
 
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isDragging.current = true;
+      dragStartX.current = e.clientX;
+      dragStartWidth.current = sidebarWidth;
+      document.body.style.cursor = "ew-resize";
+      document.body.style.userSelect = "none";
+    },
+    [sidebarWidth],
+  );
+
   useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = e.clientX - dragStartX.current;
+      const newWidth = dragStartWidth.current + delta;
+
+      if (newWidth < SIDEBAR_COLLAPSE_THRESHOLD) {
+        setSidebarWidth(0);
+      } else {
+        setSidebarWidth(
+          Math.min(Math.max(newWidth, SIDEBAR_MIN_WIDTH), SIDEBAR_MAX_WIDTH),
+        );
+      }
+    };
+
+    const onMouseUp = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
     return () => {
-      if (transitionTimer.current) clearTimeout(transitionTimer.current);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
     };
   }, []);
 
-  const handleToggle = useCallback(() => {
-    if (isTransitioning.current) return;
-
-    isTransitioning.current = true;
-    setExpanded((v) => !v);
-
-    transitionTimer.current = setTimeout(() => {
-      isTransitioning.current = false;
-    }, TRANSITION_DURATION_MS);
-  }, []);
-
   const handleBackdropClick = useCallback(() => {
-    if (isTransitioning.current) return;
-    isTransitioning.current = true;
-    setExpanded(false);
-    transitionTimer.current = setTimeout(() => {
-      isTransitioning.current = false;
-    }, TRANSITION_DURATION_MS);
+    setSidebarWidth(0);
   }, []);
 
   const handleLinkClick = useCallback(() => {
-    if (isMobileRef.current) setExpanded(false);
+    if (isMobileRef.current) setSidebarWidth(0);
   }, []);
+
+  const isExpanded = sidebarWidth > 0;
 
   const getIcon = (iconName?: string): React.ReactElement => {
     const icons: Record<string, React.ReactElement> = {
@@ -132,12 +147,16 @@ const Sidebar: React.FC = () => {
     <>
       <div
         className={`app-sidebar-wrapper ${
-          expanded
+          isExpanded
             ? "app-sidebar-wrapper--expanded"
             : "app-sidebar-wrapper--collapsed"
         }`}
+        style={!isMobile ? { width: isExpanded ? sidebarWidth : 0 } : undefined}
       >
-        <aside className="app-sidebar">
+        <aside
+          className="app-sidebar"
+          style={!isMobile ? { width: sidebarWidth } : undefined}
+        >
           <div className="app-sidebar__header">
             <h3 className="app-sidebar__title">Navigation</h3>
           </div>
@@ -156,16 +175,18 @@ const Sidebar: React.FC = () => {
           </div>
         </aside>
 
-        <button
-          className="app-sidebar__toggle-button"
-          onClick={handleToggle}
-          aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          {expanded ? <ChevronLeft size={13} /> : <ChevronRight size={13} />}
-        </button>
+        <div
+          className={`app-sidebar__drag-handle ${
+            isDragging ? "app-sidebar__drag-handle--dragging" : ""
+          }`}
+          onMouseDown={handleDragStart}
+          aria-label="Resize sidebar"
+          role="separator"
+          aria-orientation="vertical"
+        />
       </div>
 
-      {isMobile && expanded && (
+      {isMobile && isExpanded && (
         <div
           className="app-sidebar__backdrop"
           onClick={handleBackdropClick}
