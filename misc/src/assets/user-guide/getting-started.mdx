@@ -6,13 +6,14 @@ import { InfoBox, TipBox } from '@components'
 This project is still under active development. 
 ```
 
-`risc` is a highly configurable CPU design framework written in [Chisel](https://github.com/chipsalliance/chisel), targeting SystemVerilog code generation for different backends and RISC ISAs(compared to CISC ISAs).
+`risc` is a highly configurable CPU design framework written in [**Chisel**](https://github.com/chipsalliance/chisel), targeting SystemVerilog code generation for **different** backends and **RISC** ISAs(compared to **CISC** ISAs).
 
 ## Prerequisites
 
-- **OS** - This project functions well on Linux/MacOS, but may encounter issues on Windows(we haven't tested it on it). It is recommended to use `WSL` if you are on Windows.
+- **OS** - This project functions well on **Linux/MacOS**, but may encounter issues on Windows(we haven't tested it on it). It is recommended to use `WSL` if you are on Windows.
 - **sbt** - version defined in `project/build.properties` (currently `1.10.11`)
 - **Chisel / Scala** — versions defined in `build.sbt`
+- **Protobuf** 
 - **[Vopts](https://github.com/dashygo097/Vopts.git)** — must be installed before building
 
 ### Vopts
@@ -42,7 +43,7 @@ make run
 ```
 
 ## Configurations
-The configuration file is at arch/package.scala where you can change the parameters of the generated design, such as the ISA, the cache size etc.
+The configuration file is at **arch/package.scala** where you can change the parameters of the generated design, such as the ISA, the cache size etc.
 
 ```info
 By now we have only impled rv32i but we have a well-designed architecture for supporting other ISAs. We will add more ISAs in the future:)

@@ -25,10 +25,11 @@ make    # uses `Ninja` by default
 ### Manual Build
 
 ```bash
+make config # You can edit `build/config.cmake` to customize the build, e.g. enable ccache, set the target architecture, etc.
 mkdir -p build
 cd build
-cmake ..
-make
+cmake .. -G Ninja
+ninja
 ```
 
 ## Writing and Running Tests
