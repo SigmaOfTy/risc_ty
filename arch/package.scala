@@ -10,7 +10,9 @@ package object configs {
 
   // --------------------------------------------
   // Architecture Parameters
-  object ISA     extends Field[String]("rv32i")
+  object ISA extends Field[String]("rv32i")
+
+  // General Parameters
   object IsDebug extends Field[Boolean](true)
 
   // CPU Parameters
@@ -45,20 +47,23 @@ package object configs {
 
   // NOTE: You should not modify the parameters below, as they are derived from the user options above
   // Derived Parameters
-  object XLen        extends Field[Int](IsaDef.xlen(ISA()))
-  object ILen        extends Field[Int](IsaDef.ilen(ISA()))
-  object NumArchRegs extends Field[Int](IsaDef.numArchRegs(ISA()))
-  object IsBigEndian extends Field[Boolean](IsaDef.isBigEndian(ISA()))
-  object Bubble      extends Field[BitPat](IsaDef.bubble(ISA()))
+  object XLen        extends Field[Int](IsaFactory.xlen(ISA()))
+  object ILen        extends Field[Int](IsaFactory.ilen(ISA()))
+  object NumArchRegs extends Field[Int](IsaFactory.numArchRegs(ISA()))
+  object IsBigEndian extends Field[Boolean](IsaFactory.isBigEndian(ISA()))
+  object Bubble      extends Field[BitPat](IsaFactory.bubble(ISA()))
 
   implicit val p: Parameters = Parameters.empty ++ Map(
     // ISA
     ISA         -> ISA(),
-    IsDebug     -> IsDebug(),
     XLen        -> XLen(),
     ILen        -> ILen(),
     NumArchRegs -> NumArchRegs(),
     IsBigEndian -> IsBigEndian(),
+    Bubble      -> Bubble(),
+
+    // General
+    IsDebug -> IsDebug(),
 
     // Core
     IBufferSize        -> IBufferSize(),
@@ -80,8 +85,5 @@ package object configs {
     BusType                       -> BusType(),
     BusCrossbarFifoDepthPerClient -> BusCrossbarFifoDepthPerClient(),
     BusAddressMap                 -> BusAddressMap(),
-
-    // Instructions
-    Bubble -> Bubble(),
   )
 }

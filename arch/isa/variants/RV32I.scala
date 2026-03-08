@@ -3,16 +3,8 @@ package arch.isa
 import arch.configs.proto._
 import chisel3.util.BitPat
 
-object RV32I extends IsaFactory {
-
-  private def enc(name: String, bp: BitPat): InstructionEncoding =
-    InstructionEncoding(
-      name = name,
-      value = bp.value.intValue,
-      mask = bp.mask.intValue,
-    )
-
-  override val toIsa: Isa = Isa(
+object RV32I extends IsaWrapper {
+  override val isa: Isa = Isa(
     name = "rv32i",
     xlen = 32,
     ilen = 32,
@@ -79,5 +71,12 @@ object RV32I extends IsaFactory {
     ),
   )
 
-  IsaDef.register(this)
+  private def enc(name: String, bp: BitPat): InstructionEncoding =
+    InstructionEncoding(
+      name = name,
+      value = bp.value.intValue,
+      mask = bp.mask.intValue,
+    )
+
+  IsaFactory.register(this)
 }
