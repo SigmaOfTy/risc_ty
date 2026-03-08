@@ -45,11 +45,11 @@ package object configs {
 
   // NOTE: You should not modify the parameters below, as they are derived from the user options above
   // Derived Parameters
-  object XLen        extends Field[Int](ISADefinition.xlen(ISA()))
-  object ILen        extends Field[Int](ISADefinition.ilen(ISA()))
-  object NumArchRegs extends Field[Int](ISADefinition.numArchRegs(ISA()))
-  object IsBigEndian extends Field[Boolean](ISADefinition.isBigEndian(ISA()))
-  object Bubble      extends Field[BitPat](ISADefinition.bubble(ISA()))
+  object XLen        extends Field[Int](IsaDef.xlen(ISA()))
+  object ILen        extends Field[Int](IsaDef.ilen(ISA()))
+  object NumArchRegs extends Field[Int](IsaDef.numArchRegs(ISA()))
+  object IsBigEndian extends Field[Boolean](IsaDef.isBigEndian(ISA()))
+  object Bubble      extends Field[BitPat](IsaDef.bubble(ISA()))
 
   implicit val p: Parameters = Parameters.empty ++ Map(
     // ISA

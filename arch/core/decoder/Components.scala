@@ -48,7 +48,6 @@ class DecodedOutput(implicit p: Parameters) extends Bundle {
 
 trait DecoderUtilities extends Utilities {
   def default: List[BitPat]
-  def bubble: BitPat
   def decode(instr: UInt): DecodedOutput
   def table: Array[(BitPat, List[BitPat])]
 }
