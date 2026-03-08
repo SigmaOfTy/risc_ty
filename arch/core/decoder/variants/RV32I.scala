@@ -16,7 +16,7 @@ trait RV32IDecodeConsts extends Consts with RV32IAluConsts with RV32ILsuConsts w
 object RV32IDecoderUtilities extends RegisteredUtilities[DecoderUtilities] with RV32IDecodeConsts {
 
   private val allEncodings =
-    RV32I.toIsa.instrSet
+    RV32I.isa.instrSet
       .map(s => s.nop.toSeq ++ s.encodings)
       .getOrElse(Seq.empty)
 

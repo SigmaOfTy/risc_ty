@@ -63,7 +63,7 @@ object RiscDump {
   }
 
   def dumpIsa(p: Parameters, jsonPath: String, binPath: Option[String] = None): Unit = {
-    val isa = IsaDef.toIsa(p(ISA))
+    val isa = IsaFactory.isa(p(ISA))
     writeJson(isa, jsonPath)
     binPath.foreach(bp => writeBin(isa.toByteArray, bp))
     println(s"[RiscDump] isa → $jsonPath")

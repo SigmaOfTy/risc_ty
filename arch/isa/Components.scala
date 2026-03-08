@@ -4,17 +4,16 @@ import arch.configs.proto._
 import chisel3.util.BitPat
 import scala.collection.mutable.LinkedHashMap
 
-abstract class IsaFactory {
-  def toIsa: Isa
-
-  final def name: String         = toIsa.name
-  final def xlen: Int            = toIsa.xlen.toInt
-  final def ilen: Int            = toIsa.ilen.toInt
-  final def numArchRegs: Int     = toIsa.numArchRegs.toInt
-  final def isBigEndian: Boolean = toIsa.isBigEndian
+abstract class IsaWrapper {
+  def isa: Isa
+  final def name: String         = isa.name
+  final def xlen: Int            = isa.xlen.toInt
+  final def ilen: Int            = isa.ilen.toInt
+  final def numArchRegs: Int     = isa.numArchRegs.toInt
+  final def isBigEndian: Boolean = isa.isBigEndian
 
   final def bubble: BitPat = {
-    val nop = toIsa.instrSet
+    val nop = isa.instrSet
       .flatMap(_.nop)
       .getOrElse(throw new Exception(s"ISA '$name' has no NOP defined"))
 
@@ -29,30 +28,30 @@ abstract class IsaFactory {
 
 }
 
-object IsaDef {
-  private val registry = LinkedHashMap.empty[String, IsaFactory]
+object IsaFactory {
+  private val registry = LinkedHashMap.empty[String, IsaWrapper]
 
-  def register(isa: IsaFactory): Unit = {
+  def register(isa: IsaWrapper): Unit = {
     require(!registry.contains(isa.name), s"ISA '${isa.name}' already registered")
     registry(isa.name) = isa
   }
 
-  def fromString(name: String): Option[IsaFactory] =
+  def fromString(name: String): Option[IsaWrapper] =
     registry.get(name.toLowerCase)
 
-  def available: Seq[IsaFactory] = registry.values.toSeq
+  def available: Seq[IsaWrapper] = registry.values.toSeq
 
-  private def get(name: String): IsaFactory =
+  private def get(name: String): IsaWrapper =
     fromString(name).getOrElse(
       throw new Exception(
         s"Unknown Isa: '$name'. Available: ${available.map(_.name).mkString(", ")}"
       )
     )
 
+  def isa(isa: String): Isa             = get(isa).isa
   def xlen(isa: String): Int            = get(isa).xlen
   def ilen(isa: String): Int            = get(isa).ilen
   def numArchRegs(isa: String): Int     = get(isa).numArchRegs
   def isBigEndian(isa: String): Boolean = get(isa).isBigEndian
   def bubble(isa: String): BitPat       = get(isa).bubble
-  def toIsa(isa: String): Isa           = get(isa).toIsa
 }
