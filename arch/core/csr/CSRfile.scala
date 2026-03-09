@@ -1,8 +1,8 @@
 package arch.core.csr
 
 import arch.configs._
+import vopts.utils.CombTree
 import chisel3._
-import chisel3.util._
 
 class CsrFile(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA)}_csrfile"
@@ -22,56 +22,47 @@ class CsrFile(implicit p: Parameters) extends Module {
     name -> port
   }.toMap
 
-  val csrTable     = utils.table.map(_._1)
-  val addr_map     = csrTable.map(_.addr.U)
-  val writable_vec = VecInit(csrTable.map(_.writable.B))
+  val csrTable = utils.table.map(_._1)
+  val addrMap  = csrTable.map(_.addr.U(utils.addrWidth.W))
 
-  val csrRegs = csrTable.zipWithIndex.map { case (reg, _) =>
+  val csrRegs: Seq[UInt] = csrTable.zipWithIndex.map { case (reg, _) =>
     val r = RegInit(reg.initValue.U(p(XLen).W))
     r.suggestName(reg.name)
     r
   }
 
-  val addr_match           = addr_map.map(_ === addr).reduce(_ || _)
-  val write_access_allowed = addr_match &&
-    MuxCase(
-      false.B,
-      csrTable.zipWithIndex.map { case (reg, i) =>
-        (addr === addr_map(i)) -> writable_vec(i)
-      }
-    )
-
-  val src_data = Mux(utils.isImm(cmd), utils.genImm(imm), src)
+  val hits: Seq[Bool]          = addrMap.map(_ === addr)
+  val addrMatch: Bool          = CombTree.orTree(hits)
+  val writableHits: Seq[Bool]  = csrTable.zip(hits).map { case (reg, h) =>
+    h && reg.writable.B
+  }
+  val writeAccessAllowed: Bool = addrMatch && CombTree.orTree(writableHits)
+  val srcData: UInt            = Mux(utils.isImm(cmd), utils.genImm(imm), src)
 
   utils.table.zipWithIndex.foreach { case ((reg, behavior), i) =>
     behavior match {
+
       case AlwaysUpdate(fn) =>
         csrRegs(i) := fn(extraInputIO)
 
       case ConditionalUpdate(fn) =>
         csrRegs(i) := fn(extraInputIO)
-        when(en && write_access_allowed && addr === addr_map(i) && writable_vec(i)) {
-          val wdata = utils.fn(cmd, csrRegs(i), src_data)
-          csrRegs(i) := wdata
+        when(en && writeAccessAllowed && hits(i) && reg.writable.B) {
+          csrRegs(i) := utils.fn(cmd, csrRegs(i), srcData)
         }
 
       case NormalUpdate =>
-        when(en && write_access_allowed) {
-          when(addr === addr_map(i) && writable_vec(i)) {
-            csrRegs(i) := utils.fn(cmd, csrRegs(i), src_data)
-          }
+        when(en && writeAccessAllowed && hits(i) && reg.writable.B) {
+          csrRegs(i) := utils.fn(cmd, csrRegs(i), srcData)
         }
     }
   }
 
+  val readCases: Seq[(Bool, UInt)] = hits.zip(csrRegs)
+
   rd := Mux(
     en,
-    MuxCase(
-      0.U(p(XLen).W),
-      csrTable.zipWithIndex.map { case (_, i) =>
-        (addr === addr_map(i)) -> csrRegs(i)
-      }
-    ),
+    CombTree.oneHotMux(readCases),
     0.U(p(XLen).W)
   )
 }
