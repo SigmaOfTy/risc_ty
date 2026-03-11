@@ -5,30 +5,106 @@ import vopts.mem.cache._
 import chisel3._
 import chisel3.util._
 
-class BtbEntry(tagWidth: Int)(implicit p: Parameters) extends Bundle {
+class BtbEntry(tagWidth: Int)(implicit p: Parameters) extends Bundle with BHTState {
+  val valid  = Bool()
   val tag    = UInt(tagWidth.W)
   val target = UInt(p(XLen).W)
-  val ctr    = UInt(2.W)
+  val ctr    = UInt(SZ_BHT.W)
 }
 
-class BtbQueryInfo(implicit p: Parameters) extends Bundle {
-  val pc = UInt(p(XLen).W)
+object BtbEntry extends BHTState {
+  def default(tagWidth: Int)(implicit p: Parameters): BtbEntry = {
+    val e = Wire(new BtbEntry(tagWidth))
+    e.valid  := false.B
+    e.tag    := 0.U
+    e.target := 0.U
+    e.ctr    := BHT_WT.value.U(SZ_BHT.W)
+    e
+  }
 }
 
-class BtbUpdateInfo(implicit p: Parameters) extends Bundle {
+class BpuUpdate(implicit p: Parameters) extends Bundle {
+  val valid  = Bool()
   val pc     = UInt(p(XLen).W)
   val target = UInt(p(XLen).W)
   val taken  = Bool()
 }
 
-class Btb(numSets: Int, numWays: Int, replPolicy: ReplacementPolicy)(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_btb"
+class BTB(
+  numSets: Int,
+  numWays: Int,
+  replPolicy: ReplacementPolicy
+)(implicit p: Parameters)
+    extends Module {
 
-  // IO
-  val query  = IO(Flipped(Decoupled(new BtbQueryInfo)))
-  val update = IO(Flipped(Decoupled(new BtbUpdateInfo)))
+  private val iAlignWidth = log2Ceil(p(IAlign) / 8)
+  private val indexWidth  = log2Ceil(numSets)
+  private val tagWidth    = p(XLen) - indexWidth - iAlignWidth
 
-  // Storage
-  val tagWidth = log2Ceil(p(XLen) / 4) // Assuming 4-byte aligned instructions
-  val btb      = RegInit(VecInit.fill(numSets, numWays)(0.U.asTypeOf(new BtbEntry(tagWidth))))
+  val query_pc  = Input(UInt(p(XLen).W))
+  val hit       = Output(Bool())
+  val entry_out = Output(new BtbEntry(tagWidth))
+  val update    = Input(new BpuUpdate)
+
+  val entries = RegInit(
+    VecInit(
+      Seq.fill(numSets)(
+        VecInit(
+          Seq.fill(numWays)(
+            0.U.asTypeOf(new BtbEntry(tagWidth))
+          )
+        )
+      )
+    )
+  )
+
+  val replStates = Seq.fill(numSets)(new PseudoLRUState(numWays))
+
+  def getIndex(pc: UInt): UInt = pc(indexWidth + 1, iAlignWidth)
+  def getTag(pc: UInt): UInt   = pc(p(XLen) - 1, indexWidth + iAlignWidth)
+
+  val qIndex = getIndex(query_pc)
+  val qTag   = getTag(query_pc)
+  val qSet   = entries(qIndex)
+
+  val hitBits: Seq[Bool] = (0 until numWays).map { w =>
+    qSet(w).valid && (qSet(w).tag === qTag)
+  }
+  val anyHit             = hitBits.reduce(_ || _)
+  val hitWay             = PriorityEncoder(VecInit(hitBits))
+
+  hit       := anyHit
+  entry_out := Mux(anyHit, qSet(hitWay), 0.U.asTypeOf(new BtbEntry(tagWidth)))
+
+  when(update.valid) {
+    val uIndex = getIndex(update.pc)
+    val uTag   = getTag(update.pc)
+    val uSet   = entries(uIndex)
+
+    val uHitBits: Seq[Bool] = (0 until numWays).map { w =>
+      uSet(w).valid && (uSet(w).tag === uTag)
+    }
+    val uAnyHit             = uHitBits.reduce(_ || _)
+    val uHitWay             = PriorityEncoder(VecInit(uHitBits))
+
+    val victimWay = Wire(UInt(log2Ceil(numWays).W))
+    victimWay := 0.U
+    for (s <- 0 until numSets)
+      when(s.U === uIndex)(victimWay := replStates(s).getVictim())
+
+    val writeWay = Mux(uAnyHit, uHitWay, victimWay)
+
+    val newEntry = Wire(new BtbEntry(tagWidth))
+    newEntry.valid  := true.B
+    newEntry.tag    := uTag
+    newEntry.target := update.target
+
+    val oldCtr = uSet(writeWay).ctr
+    newEntry.ctr := Mux(update.taken, Mux(oldCtr === 3.U, 3.U, oldCtr + 1.U), Mux(oldCtr === 0.U, 0.U, oldCtr - 1.U))
+
+    entries(uIndex)(writeWay) := newEntry
+
+    for (s <- 0 until numSets)
+      when(s.U === uIndex)(replStates(s).update(writeWay, uAnyHit))
+  }
 }
