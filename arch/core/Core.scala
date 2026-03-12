@@ -65,25 +65,21 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   val bpu_correct_taken = if_id.ID.bpu_pred_taken &&
     (bru.target === if_id.ID.bpu_pred_target)
 
-  val bru_mispredict_taken = bru.taken && !bpu_correct_taken
-
+  val bru_mispredict_taken     = bru.taken && !bpu_correct_taken
   val bru_mispredict_not_taken = bru.en && !bru.taken && if_id.ID.bpu_pred_taken
 
-  ifu.bru_taken     := bru_mispredict_taken
-  ifu.bru_target    := bru.target
-  ifu.bru_not_taken := bru_mispredict_not_taken
-  ifu.bru_branch_pc := if_id.ID.pc
+  ifu.bru_taken       := bru_mispredict_taken
+  ifu.bru_target      := bru.target
+  ifu.bru_not_taken   := bru_mispredict_not_taken
+  ifu.bru_branch_pc   := if_id.ID.pc
+  ifu.id_ex_stall     := id_ex.STALL
+  ifu.load_use_hazard := load_use_hazard
+  ifu.lsu_busy        := lsu.busy
 
   bpu.update.valid  := bru.en
   bpu.update.pc     := if_id.ID.pc
   bpu.update.target := bru.target
   bpu.update.taken  := bru.taken
-
-  ifu.bru_taken       := bru.taken
-  ifu.bru_target      := bru.target
-  ifu.id_ex_stall     := id_ex.STALL
-  ifu.load_use_hazard := load_use_hazard
-  ifu.lsu_busy        := lsu.busy
 
   // IF/ID Pipeline
   if_id.STALL              := ifu.if_id_stall
