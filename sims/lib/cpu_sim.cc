@@ -79,7 +79,6 @@ void CPUSimulator::reset() {
   dut_->eval();
 
   _time_count = 0;
-  _instr_count = 0;
 
   _l1_icache_accesses = 0;
   _l1_icache_misses = 0;
@@ -240,12 +239,11 @@ void CPUSimulator::clock_tick() {
                dut_->debug_branch_source, dut_->debug_branch_target);
   }
 
-  if (dut_->debug_wb_instr != BUBBLE) {
-    _instr_count++;
-    Instruction inst(static_cast<instr_t>(dut_->debug_wb_instr));
+  if (dut_->debug_instr != BUBBLE) {
+    Instruction inst(static_cast<instr_t>(dut_->debug_instr));
     DEMU_INFO("RETIRE | Cycle {:6d} | PC=0x{:08x} | Inst=0x{:08x} ({})",
               cycle_count(), static_cast<addr_t>(dut_->debug_pc),
-              dut_->debug_wb_instr, inst.to_string());
+              dut_->debug_instr, inst.to_string());
   }
 
   on_clock_tick();
@@ -285,7 +283,7 @@ void CPUSimulator::run(uint64_t max_cycles) {
   DEMU_INFO("Simulation completed!")
   DEMU_INFO("  With {} cycles, {} instructions, IPC: {:.2f} "
             "after {} ms",
-            cycle_count(), instr_count(), ipc(), duration / 1000.0);
+            cycle_count(), instret_count(), ipc(), duration / 1000.0);
 
   DEMU_INFO("  L1 Icache Hit Rate: {:.2f} %", l1_icache_hit_rate() * 100);
   DEMU_INFO("  L1 Dcache Hit Rate: {:.2f} %", l1_dcache_hit_rate() * 100);

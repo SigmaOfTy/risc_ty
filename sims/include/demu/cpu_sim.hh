@@ -82,10 +82,12 @@ public:
   [[nodiscard]] uint64_t cycle_count() const noexcept {
     return dut_->debug_cycle_count;
   }
-  [[nodiscard]] uint64_t instr_count() const { return _instr_count; }
+  [[nodiscard]] uint64_t instret_count() const {
+    return dut_->debug_instret_count;
+  }
   [[nodiscard]] double ipc() const noexcept {
     return dut_->debug_cycle_count > 0
-               ? (double)_instr_count / dut_->debug_cycle_count
+               ? (double)dut_->debug_instret_count / dut_->debug_cycle_count
                : 0.0;
   };
   [[nodiscard]] double l1_icache_hit_rate() const noexcept {
@@ -131,7 +133,6 @@ protected:
 
   // Simulator state
   uint64_t _time_count{0};
-  uint64_t _instr_count{0};
 
   uint64_t _l1_icache_accesses{0};
   uint64_t _l1_icache_misses{0};
