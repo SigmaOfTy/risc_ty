@@ -15,7 +15,7 @@ using namespace isa;
 inline constexpr size_t UART_ADDR_RANGE = 0x10u; //< 16 bytes total
 inline constexpr addr_t UART_REG_DATA = 0x00u;   //< TX write / RX read
 inline constexpr addr_t UART_REG_STATUS = 0x04u; //< Read-only status flags
-inline constexpr addr_t UART_REG_CTRL = 0x08u;   //< Control / IRQ-enable
+inline constexpr addr_t UART_REG_CTRL = 0x08u;   //< Control
 inline constexpr addr_t UART_REG_BAUD = 0x0Cu;   //< Baud-rate divisor
 
 // STATUS register bit-fields
@@ -24,22 +24,16 @@ inline constexpr uint32_t UART_STATUS_RX_READY =
 inline constexpr uint32_t UART_STATUS_TX_READY = (1u << 1); //< TX FIFO not full
 inline constexpr uint32_t UART_STATUS_TX_EMPTY = (1u << 2); //< TX FIFO empty
 
-// CTRL register bit-fields
-inline constexpr uint32_t UART_CTRL_RX_IRQ_EN =
-    (1u << 0); //< Enable RX interrupt
-inline constexpr uint32_t UART_CTRL_TX_IRQ_EN =
-    (1u << 1); //< Enable TX-empty interrupt
-
-class UARTDevice : public Hardware {
+class UartDevice : public Hardware {
 public:
-  explicit UARTDevice(addr_t base_addr, size_t size, size_t tx_fifo_depth = 16,
+  explicit UartDevice(addr_t base_addr, size_t size, size_t tx_fifo_depth = 16,
                       size_t rx_fifo_depth = 16);
 
-  ~UARTDevice() override = default;
+  ~UartDevice() override = default;
 
-  UARTDevice(const UARTDevice &) = delete;
-  UARTDevice &operator=(const UARTDevice &) = delete;
-  UARTDevice(UARTDevice &&) = default;
+  UartDevice(const UartDevice &) = delete;
+  UartDevice &operator=(const UartDevice &) = delete;
+  UartDevice(UartDevice &&) = default;
 
   [[nodiscard]] addr_t base_address() const noexcept override {
     return regs_->base_address();
@@ -55,13 +49,9 @@ public:
   void reset() override;
 
   [[nodiscard]] word_t read_reg(addr_t offset) noexcept;
-
   void write_reg(addr_t offset, word_t data, byte_t strb = 0xFu) noexcept;
 
   bool rx_push(uint8_t byte);
-
-  [[nodiscard]] bool irq_pending() const noexcept;
-
   void set_tx_callback(std::function<void(uint8_t)> cb) {
     tx_callback_ = std::move(cb);
   }
@@ -79,7 +69,6 @@ private:
   std::queue<uint8_t> tx_fifo_;
   std::queue<uint8_t> rx_fifo_;
 
-  // states
   const size_t tx_fifo_depth_;
   const size_t rx_fifo_depth_;
 
