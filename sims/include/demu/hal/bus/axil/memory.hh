@@ -26,6 +26,12 @@ public:
   void reset() override;
   void clock_tick() override;
 
+  [[nodiscard]] const char *name() const noexcept override {
+    return "AXILite Memory";
+  }
+
+  void dump(addr_t start, size_t size) const noexcept override;
+
   // AW
   void aw_valid(addr_t addr) override;
   [[nodiscard]] bool aw_ready() const noexcept override;
@@ -55,12 +61,6 @@ public:
   };
   void read_delay(size_t cycles) { read_delay_ = cycles; };
   void write_delay(size_t cycles) { write_delay_ = cycles; };
-
-  [[nodiscard]] const char *name() const noexcept override {
-    return "AXILite Memory";
-  }
-
-  void dump(addr_t start, size_t size) const noexcept override;
 
 private:
   // components

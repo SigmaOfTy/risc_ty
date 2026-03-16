@@ -31,12 +31,14 @@ public:
   [[nodiscard]] size_t address_range() const noexcept override {
     return uart_->address_range();
   }
-  [[nodiscard]] const char *name() const noexcept override {
-    return "AXILite UART";
-  }
 
   void reset() override;
   void clock_tick() override;
+
+  [[nodiscard]] const char *name() const noexcept override {
+    return "AXILite UART";
+  }
+  void dump(addr_t start, size_t size) const noexcept override;
 
   // AW
   void aw_valid(addr_t addr) override;
@@ -72,12 +74,9 @@ public:
   void read_delay(size_t cycles) noexcept { read_delay_ = cycles; }
   void write_delay(size_t cycles) noexcept { write_delay_ = cycles; }
 
-  void dump(addr_t start, size_t size) const noexcept override;
-
 private:
   // components
   std::unique_ptr<uart::Uart> uart_;
-
   size_t read_delay_;
   size_t write_delay_;
 
