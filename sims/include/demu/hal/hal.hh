@@ -13,3 +13,4 @@
 #include "./bus/axil/port_handler.hh"
 #include "./bus/axil/signals.hh"
 #include "./bus/axil/slave.hh"
+#include "./bus/axil/uart.hh"
