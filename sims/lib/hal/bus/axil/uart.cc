@@ -25,6 +25,19 @@ void AXILiteUart::clock_tick() {
   uart_->clock_tick();
 }
 
+void AXILiteUart::dump(addr_t start, size_t size) const noexcept {
+  if (!owns_address(start)) {
+    HAL_WARN(
+        "AXILiteUart dump: start address 0x{:08X} not owned by this device",
+        static_cast<uint64_t>(start));
+    return;
+  }
+  HAL_INFO("AXILiteUart @ 0x{:08X} – pending W:{} R:{}",
+           static_cast<uint64_t>(base_address()), _write_resp_queue.size(),
+           _read_queue.size());
+  uart_->dump(start, size);
+}
+
 void AXILiteUart::process_writes() {
   if (_write_addr_queue.empty() || _write_data_queue.empty())
     return;
@@ -127,19 +140,6 @@ uint8_t AXILiteUart::r_resp() const noexcept {
   return _read_queue.empty()
              ? 0u
              : (uart_->owns_address(_read_queue.front().addr) ? 0u : 2u);
-}
-
-void AXILiteUart::dump(addr_t start, size_t size) const noexcept {
-  if (!owns_address(start)) {
-    HAL_WARN(
-        "AXILiteUart dump: start address 0x{:08X} not owned by this device",
-        static_cast<uint64_t>(start));
-    return;
-  }
-  HAL_INFO("AXILiteUart @ 0x{:08X} – pending W:{} R:{}",
-           static_cast<uint64_t>(base_address()), _write_resp_queue.size(),
-           _read_queue.size());
-  uart_->dump(start, size);
 }
 
 } // namespace demu::hal::axi
