@@ -9,6 +9,7 @@
 
 #define ISA_NAME "rv32i"
 #define NUM_GPRS 32
+#define INSTR_ALIGNMENT 4
 
 namespace demu::isa {
 

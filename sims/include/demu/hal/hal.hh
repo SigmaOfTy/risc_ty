@@ -14,7 +14,7 @@
 
 // Bus
 // AXI4-Lite
-#include "./bus/axil/memory.hh"
 #include "./bus/axil/port_handler.hh"
 #include "./bus/axil/signals.hh"
 #include "./bus/axil/slave.hh"
+#include "./bus/axil/sram.hh"

@@ -1,20 +1,19 @@
 #pragma once
 
 #include "../../allocator.hh"
+#include "../../peripheral/sram/sram.hh"
 #include "./slave.hh"
 #include <queue>
 #include <string>
 
 namespace demu::hal::axi {
 
-class AXILiteMemory final : public AXILiteSlave {
+class AXILiteSRAM final : public AXILiteSlave {
 public:
-  explicit AXILiteMemory(const risc::DeviceDescriptor &desc)
-      : AXILiteSlave(desc), memory_(std::make_unique<MemoryAllocator>(
-                                static_cast<addr_t>(desc.base()),
-                                static_cast<size_t>(desc.size()))) {}
+  explicit AXILiteSRAM(const risc::DeviceDescriptor &desc)
+      : AXILiteSlave(desc), sram_(std::make_unique<sram::SRAM>(desc)) {}
 
-  ~AXILiteMemory() override = default;
+  ~AXILiteSRAM() override = default;
 
   void reset() override;
   void clock_tick() override;
@@ -41,11 +40,11 @@ public:
 
   // Bypass
   bool load_binary(const std::string &filename, addr_t offset = 0) {
-    return memory_->load_binary(filename, offset);
+    return sram_->memory().load_binary(filename, offset);
   }
 
 private:
-  std::unique_ptr<MemoryAllocator> memory_;
+  std::unique_ptr<sram::SRAM> sram_;
 
   struct WriteData {
     word_t data;
