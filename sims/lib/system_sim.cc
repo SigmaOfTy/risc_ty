@@ -41,7 +41,7 @@ void SystemSimulator::init() {
 }
 
 bool SystemSimulator::load_bin(const std::string &filename, addr_t base_addr) {
-  if (device_manager_->get_slave_by_name<hal::axi::AXILiteMemory>("imem")
+  if (device_manager_->get_slave_by_name<hal::axi::AXILiteSRAM>("imem")
           ->load_binary(filename, 0)) {
     return true;
   }
