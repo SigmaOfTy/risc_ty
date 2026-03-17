@@ -77,7 +77,7 @@ public:
     while (std::getline(ss, line))
       DEMU_TRACE("  {}", line);
     for (const auto &r : proto_.bus().address_map())
-      DEMU_INFO("    {:6s} base=0x{:08x} size=0x{:x}", r.device(), r.base(),
+      DEMU_INFO("    {:6s} base=0x{:08x} size=0x{:x}", r.name(), r.base(),
                 r.size());
     DEMU_INFO("==================");
   }
@@ -85,7 +85,7 @@ public:
   [[nodiscard]] const risc::DeviceDescriptor *
   find_region(const std::string &dev) const noexcept {
     for (const auto &r : proto_.bus().address_map())
-      if (r.device() == dev)
+      if (r.name() == dev)
         return &r;
     return nullptr;
   }

@@ -20,7 +20,7 @@ public:
     return static_cast<size_t>(desc_.size());
   }
   [[nodiscard]] const char *name() const noexcept override {
-    return desc_.device().c_str();
+    return desc_.name().c_str();
   }
   [[nodiscard]] risc::DeviceType device_type() const noexcept {
     return desc_.type();
