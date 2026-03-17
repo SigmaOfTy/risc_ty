@@ -20,14 +20,14 @@ struct sram_data_traits<T, std::enable_if_t<std::is_scalar_v<T>>> {
   static void set(T &d, size_t, word_t v) { d = static_cast<T>(v); }
 };
 
-template <typename T> class SRAMPortHandler final : public hal::PortHandler {
+template <typename T> class CachePortHandler final : public hal::PortHandler {
   using traits = sram_data_traits<T>;
   static constexpr size_t N = traits::width;
 
 public:
   using SignalProvider = std::function<CacheSignals<T>()>;
 
-  explicit SRAMPortHandler(SignalProvider provider)
+  explicit CachePortHandler(SignalProvider provider)
       : provider_(std::move(provider)) {}
 
   void handle(hal::Hardware *hw) noexcept override {
@@ -58,21 +58,21 @@ public:
     }
   }
 
-  const char *protocol_name() const noexcept override { return "SRAM"; }
+  const char *protocol_name() const noexcept override { return "Cache"; }
 
 private:
   SignalProvider provider_;
 };
 
 template <typename T>
-class SRAMReadOnlyPortHandler final : public hal::PortHandler {
+class CacheReadOnlyPortHandler final : public hal::PortHandler {
   using traits = sram_data_traits<T>;
   static constexpr size_t N = traits::width;
 
 public:
   using SignalProvider = std::function<CacheReadOnlySignals<T>()>;
 
-  explicit SRAMReadOnlyPortHandler(SignalProvider provider)
+  explicit CacheReadOnlyPortHandler(SignalProvider provider)
       : provider_(std::move(provider)) {}
 
   void handle(hal::Hardware *hw) noexcept override {
@@ -96,7 +96,7 @@ public:
   }
 
   const char *protocol_name() const noexcept override {
-    return "SRAM Read-Only";
+    return "Cache Read-Only";
   }
 
 private:

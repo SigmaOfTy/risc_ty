@@ -21,9 +21,9 @@ protected:
     device_manager_->register_slave<demu::hal::sram::SRAM>(1, *dmem_r);
 
     using ImemPortHandler =
-        demu::hal::sram::SRAMReadOnlyPortHandler<std::array<word_t, 4>>;
+        demu::hal::sram::CacheReadOnlyPortHandler<std::array<word_t, 4>>;
     using DmemPortHandler =
-        demu::hal::sram::SRAMPortHandler<std::array<word_t, 4>>;
+        demu::hal::sram::CachePortHandler<std::array<word_t, 4>>;
 
     device_manager_->register_handler(
         0, std::make_unique<ImemPortHandler>([this]() {
