@@ -15,10 +15,10 @@
 namespace demu {
 using namespace isa;
 
-class SystemSimulator {
+class DemuSimulator {
 public:
-  SystemSimulator(bool enabled_trace = false);
-  ~SystemSimulator();
+  DemuSimulator(bool enabled_trace = false);
+  ~DemuSimulator();
 
   // Program loading
   bool load_bin(const std::string &filename, addr_t offset = 0);
@@ -100,7 +100,6 @@ protected:
   // Internal simulation methods
   void clock_tick();
   void handle_cache_profiling();
-  void check_termination();
 
   // Overridable hooks
   virtual void register_devices() {};
