@@ -3,7 +3,7 @@
 
 namespace demu {
 
-SystemSimulator::SystemSimulator(bool enabled_trace)
+DemuSimulator::DemuSimulator(bool enabled_trace)
     : trace_enabled_(enabled_trace) {
   dut_ = std::make_unique<system_t>();
   device_manager_ = std::make_unique<hal::DeviceManager>();
@@ -16,7 +16,7 @@ SystemSimulator::SystemSimulator(bool enabled_trace)
   l1_dcache_line_size_ = config_->l1d_line_words();
 };
 
-SystemSimulator::~SystemSimulator() {
+DemuSimulator::~DemuSimulator() {
 #ifdef ENABLE_TRACE
   if (vcd_) {
     vcd_->close();
@@ -24,7 +24,7 @@ SystemSimulator::~SystemSimulator() {
 #endif
 }
 
-bool SystemSimulator::load_bin(const std::string &filename, addr_t base_addr) {
+bool DemuSimulator::load_bin(const std::string &filename, addr_t base_addr) {
   if (device_manager_->get_slave_by_name<hal::axi::AXILiteSRAM>("imem")
           ->load_binary(filename, 0)) {
     return true;
@@ -33,12 +33,12 @@ bool SystemSimulator::load_bin(const std::string &filename, addr_t base_addr) {
   return false;
 }
 
-bool SystemSimulator::load_elf(const std::string &filename) {
+bool DemuSimulator::load_elf(const std::string &filename) {
   DEMU_WARN("ELF loading not yet implemented for System mode.");
   return false;
 }
 
-void SystemSimulator::init() {
+void DemuSimulator::init() {
   DEMU_INFO("DEMU Simulator Initializing...");
 
   register_devices();
@@ -55,7 +55,7 @@ void SystemSimulator::init() {
 #endif
 }
 
-void SystemSimulator::reset() {
+void DemuSimulator::reset() {
   DEMU_INFO("Resetting...");
   dut_->reset = 1;
   dut_->clock = 0;
@@ -80,13 +80,13 @@ void SystemSimulator::reset() {
             static_cast<addr_t>(dut_->debug_pc))
 }
 
-void SystemSimulator::step(uint64_t cycles) {
+void DemuSimulator::step(uint64_t cycles) {
   for (uint64_t i = 0; i < cycles; i++) {
     clock_tick();
   }
 }
 
-void SystemSimulator::run(uint64_t max_cycles) {
+void DemuSimulator::run(uint64_t max_cycles) {
   DEMU_INFO("Starting DEMU Simulation...");
   uint64_t target = max_cycles > 0 ? max_cycles : timeout_;
 
@@ -94,7 +94,6 @@ void SystemSimulator::run(uint64_t max_cycles) {
   on_init();
   while (cycle_count() < target && !_terminate) {
     clock_tick();
-    check_termination();
   }
   on_exit();
   auto end_time = std::chrono::high_resolution_clock::now();
@@ -112,7 +111,7 @@ void SystemSimulator::run(uint64_t max_cycles) {
   DEMU_INFO("  L1 Dcache Hit Rate: {:.2f} %", l1_dcache_hit_rate() * 100);
 }
 
-void SystemSimulator::dump_registers() const {
+void DemuSimulator::dump_registers() const {
   DEMU_INFO("Register Dump:");
   for (int i = 0; i < NUM_GPRS; i += 4) {
     DEMU_INFO(
@@ -121,7 +120,7 @@ void SystemSimulator::dump_registers() const {
   }
 }
 
-void SystemSimulator::dump_memory(addr_t start, size_t size) const {
+void DemuSimulator::dump_memory(addr_t start, size_t size) const {
   const auto *slave = device_manager_->find_slave_for_address(start);
   if (!slave) {
     HAL_WARN("Invalid memory dump address: 0x{:0x8x}", start);
@@ -130,7 +129,7 @@ void SystemSimulator::dump_memory(addr_t start, size_t size) const {
   slave->dump(start, size);
 }
 
-void SystemSimulator::clock_tick() {
+void DemuSimulator::clock_tick() {
   DEMU_CPU_TICK(cycle_count());
 
   dut_->clock = 0;
@@ -183,7 +182,7 @@ void SystemSimulator::clock_tick() {
 #endif
 }
 
-void SystemSimulator::handle_cache_profiling() {
+void DemuSimulator::handle_cache_profiling() {
   if (dut_->debug_l1_icache_access) {
     _l1_icache_accesses++;
     if (dut_->debug_l1_icache_miss) {
@@ -198,7 +197,5 @@ void SystemSimulator::handle_cache_profiling() {
     }
   }
 }
-
-void SystemSimulator::check_termination() {}
 
 } // namespace demu

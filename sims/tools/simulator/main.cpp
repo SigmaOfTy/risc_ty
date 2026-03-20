@@ -6,10 +6,9 @@
 
 using namespace demu::isa;
 
-class SystemSimulatorTop final : public demu::SystemSimulator {
+class DemuSimulatorTop final : public demu::DemuSimulator {
 public:
-  SystemSimulatorTop(bool enabled_trace = false)
-      : SystemSimulator(enabled_trace) {}
+  DemuSimulatorTop(bool enabled_trace = false) : DemuSimulator(enabled_trace) {}
 
 protected:
   void register_devices() override {
@@ -59,7 +58,11 @@ void print_usage(const char *prog) {
       << "  -c, --cycles <n>              Run for n cycles (0=unlimited)\n";
   std::cout
       << "  -b, --base <addr>             Binary load base address (hex)\n";
+  std::cout
+      << "  -d, --dump-regs               Dump registers after execution\n";
   std::cout << "  -m, --dump-mem <addr> <size>  Dump memory region\n";
+  std::cout
+      << "  -p, --show-pipeline           Show pipeline state each cycle\n";
   std::cout
       << "  -L12345,                      Set log level (5=error, 4=warn, "
          "3=info, 2=debug, 1=trace)\n";
@@ -77,6 +80,8 @@ int main(int argc, char **argv) {
 
   std::string program_file;
   bool enable_trace = false;
+  bool dump_regs = false;
+  bool show_pipeline = false;
   uint64_t max_cycles = 0;
   uint32_t base_addr = 0;
   uint32_t dump_mem_addr = 0;
@@ -92,6 +97,8 @@ int main(int argc, char **argv) {
       return 0;
     } else if (arg == "-t" || arg == "--trace") {
       enable_trace = true;
+    } else if (arg == "-d" || arg == "--dump-regs") {
+      dump_regs = true;
     } else if (arg == "-c" || arg == "--cycles") {
       if (i + 1 < argc) {
         max_cycles = std::stoull(argv[++i]);
@@ -106,6 +113,8 @@ int main(int argc, char **argv) {
         dump_mem_size = std::stoul(argv[++i], nullptr, 16);
         dump_mem = true;
       }
+    } else if (arg == "-p" || arg == "--show-pipeline") {
+      show_pipeline = true;
     } else if (arg[0] == '-' && arg[1] == 'L') {
       int log_level = std::stoi(arg.substr(2));
       switch (log_level) {
@@ -142,7 +151,8 @@ int main(int argc, char **argv) {
   }
 
   demu::Logger::init(spdlog_level);
-  SystemSimulatorTop sim(enable_trace);
+  DemuSimulatorTop sim(enable_trace);
+  sim.show_pipeline(show_pipeline);
 
   sim.init();
   sim.reset();
@@ -163,6 +173,10 @@ int main(int argc, char **argv) {
   }
 
   sim.run(max_cycles);
+
+  if (dump_regs) {
+    sim.dump_registers();
+  }
 
   if (dump_mem) {
     sim.dump_memory(dump_mem_addr, dump_mem_size);
