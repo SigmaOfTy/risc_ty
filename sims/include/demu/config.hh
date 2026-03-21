@@ -68,7 +68,7 @@ public:
   }
 
   void dump() const {
-    DEMU_INFO("=== RiscConfig ===");
+    DEMU_INFO("--- RiscConfig ---");
     DEMU_INFO("  config: {}", config_path_);
     std::string json;
     (void)google::protobuf::util::MessageToJsonString(proto_, &json);
@@ -79,7 +79,7 @@ public:
     for (const auto &r : proto_.bus().address_map())
       DEMU_INFO("    {:6s} base=0x{:08x} size=0x{:x}", r.name(), r.base(),
                 r.size());
-    DEMU_INFO("==================");
+    DEMU_INFO("------------------")
   }
 
   [[nodiscard]] const risc::DeviceDescriptor *

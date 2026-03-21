@@ -22,6 +22,7 @@ DemuSimulator::~DemuSimulator() {
 }
 
 bool DemuSimulator::load_bin(const std::string &filename, addr_t base_addr) {
+  // NOTE: Use AXILIteSRAM by now
   if (device_manager_->get_slave_by_name<hal::axi::AXILiteSRAM>("imem")
           ->load_binary(filename, 0)) {
     return true;
