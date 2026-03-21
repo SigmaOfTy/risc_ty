@@ -31,6 +31,9 @@ public:
   void run(uint64_t max_cycles = 0);
 
   // Architecture state access
+  [[nodiscard]] const hal::Device *device(addr_t start) {
+    return device_manager_->find_slave_for_address(start);
+  }
   [[nodiscard]] addr_t pc() const noexcept {
     return static_cast<addr_t>(dut_->debug_pc);
   };
@@ -38,6 +41,21 @@ public:
     auto it = _register_values.find(reg);
     return it != _register_values.end() ? it->second : 0;
   };
+  [[nodiscard]] instr_t if_instr() const noexcept {
+    return static_cast<instr_t>(dut_->debug_if_instr);
+  }
+  [[nodiscard]] instr_t id_instr() const noexcept {
+    return static_cast<instr_t>(dut_->debug_id_instr);
+  }
+  [[nodiscard]] instr_t ex_instr() const noexcept {
+    return static_cast<instr_t>(dut_->debug_ex_instr);
+  }
+  [[nodiscard]] instr_t mem_instr() const noexcept {
+    return static_cast<instr_t>(dut_->debug_mem_instr);
+  }
+  [[nodiscard]] instr_t wb_instr() const noexcept {
+    return static_cast<instr_t>(dut_->debug_wb_instr);
+  }
 
   // Simulator configuration
   void timeout(uint64_t timeout) noexcept { timeout_ = timeout; }

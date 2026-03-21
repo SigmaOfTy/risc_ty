@@ -97,7 +97,7 @@ class Ifu(implicit p: Parameters) extends Module {
   if_id_stall        := stall_cond
   if_id_flush        := flush_cond
   if_instr           := Mux(ibuffer.deq.fire, ibuffer.deq.bits.instr, p(Bubble).value.U(p(ILen).W))
-  if_pc              := Mux(ibuffer.deq.fire, ibuffer.deq.bits.pc, p(Bubble).value.U(p(XLen).W))
+  if_pc              := Mux(ibuffer.deq.fire, ibuffer.deq.bits.pc, 0.U(p(XLen).W))
   if_bpu_pred_taken  := Mux(ibuffer.deq.fire, ibuffer.deq.bits.bpu_pred_taken, false.B)
   if_bpu_pred_target := Mux(ibuffer.deq.fire, ibuffer.deq.bits.bpu_pred_target, 0.U(p(XLen).W))
 
