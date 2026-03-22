@@ -43,9 +43,20 @@ target_link_libraries(demu PUBLIC spdlog::spdlog)
 set(ABSL_LINK_TARGETS "")
 
 foreach(_absl_target
-    absl::log
-    absl::log_internal_message
-    absl::log_internal_check_op
+  absl::base
+  absl::strings
+  absl::str_format
+  absl::status
+  absl::statusor
+  absl::log
+  absl::log_internal_message
+  absl::log_internal_check_op
+  absl::hash
+  absl::flat_hash_map
+  absl::flat_hash_set
+  absl::cord
+  absl::synchronization
+  utf8_range
 )
   if(TARGET ${_absl_target})
     list(APPEND ABSL_LINK_TARGETS ${_absl_target})
