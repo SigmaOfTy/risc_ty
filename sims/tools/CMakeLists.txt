@@ -1,5 +1,3 @@
-project(demu LANGUAGES C CXX)
-
 # Apps
 add_subdirectory(simulator)
 add_subdirectory(debugger)
