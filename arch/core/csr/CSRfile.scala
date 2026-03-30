@@ -17,9 +17,13 @@ class CsrFile(implicit p: Parameters) extends Module {
   val pc   = IO(Input(UInt(p(XLen).W)))
   val rd   = IO(Output(UInt(p(XLen).W)))
 
-  // Trap
+  // Trap Entry
   val trap_request = IO(Output(Bool()))
   val trap_target  = IO(Output(UInt(p(XLen).W)))
+
+  // Trap Return
+  val trap_ret        = IO(Input(Bool()))
+  val trap_ret_target = IO(Output(UInt(p(XLen).W)))
 
   val extraInputIO: Map[String, UInt] = utils.extraInputs.map { case (name, width) =>
     val port = IO(Input(UInt(width.W)))
@@ -44,6 +48,9 @@ class CsrFile(implicit p: Parameters) extends Module {
 
   val trapUpdates = utils.getTrapUpdates(regNameMap, pc, cause)
 
+  trap_ret_target := utils.getTrapReturnTarget(regNameMap)
+  val retUpdates = utils.getTrapReturnUpdates(regNameMap)
+
   val hits: Seq[Bool]          = addrMap.map(_ === addr)
   val addrMatch: Bool          = CombTree.orTree(hits)
   val writableHits: Seq[Bool]  = csrTable.zip(hits).map { case (reg, h) =>
@@ -56,6 +63,9 @@ class CsrFile(implicit p: Parameters) extends Module {
     val isTrapUpdatingThisReg = do_trap && trapUpdates.contains(reg.name).B
     val trapUpdateValue       = trapUpdates.getOrElse(reg.name, 0.U)
 
+    val isRetUpdatingThisReg = trap_ret && retUpdates.contains(reg.name).B
+    val retUpdateValue       = retUpdates.getOrElse(reg.name, 0.U)
+
     behavior match {
       case AlwaysUpdate(fn) =>
         csrRegs(i) := fn(extraInputIO)
@@ -64,6 +74,8 @@ class CsrFile(implicit p: Parameters) extends Module {
         csrRegs(i) := fn(extraInputIO)
         when(isTrapUpdatingThisReg) {
           csrRegs(i) := trapUpdateValue
+        }.elsewhen(isRetUpdatingThisReg) {
+          csrRegs(i) := retUpdateValue
         }.elsewhen(en && writeAccessAllowed && hits(i) && reg.writable.B) {
           csrRegs(i) := utils.fn(cmd, csrRegs(i), srcData)
         }
@@ -71,6 +83,8 @@ class CsrFile(implicit p: Parameters) extends Module {
       case NormalUpdate =>
         when(isTrapUpdatingThisReg) {
           csrRegs(i) := trapUpdateValue
+        }.elsewhen(isRetUpdatingThisReg) {
+          csrRegs(i) := retUpdateValue
         }.elsewhen(en && writeAccessAllowed && hits(i) && reg.writable.B) {
           csrRegs(i) := utils.fn(cmd, csrRegs(i), srcData)
         }

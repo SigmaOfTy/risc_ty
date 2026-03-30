@@ -39,5 +39,3 @@ _start:
     addi x24, x0, -1      # x24 = 0xFFFFFFFF
     addi x25, x0, 1       # x25 = 1
     sltu x26, x25, x24    # x26 = 1 (1 < 0xFFFFFFFF unsigned)
-
-    ebreak

@@ -36,4 +36,3 @@ branch_not_taken:
     addi x11, x11, -1 # failure
 
 end:
-    ebreak

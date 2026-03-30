@@ -33,6 +33,10 @@ object RV32IMCsrUtilities extends RegisteredUtilities[CsrUtilities] {
       RV32ICsrUtilities.utils.checkInterrupts(regs, extra)
     override def getTrapUpdates(regs: Map[String, UInt], pc: UInt, cause: UInt): Map[String, UInt]      =
       RV32ICsrUtilities.utils.getTrapUpdates(regs, pc, cause)
+    override def getTrapReturnTarget(regs: Map[String, UInt]): UInt                                     =
+      RV32ICsrUtilities.utils.getTrapReturnTarget(regs)
+    override def getTrapReturnUpdates(regs: Map[String, UInt]): Map[String, UInt]                       =
+      RV32ICsrUtilities.utils.getTrapReturnUpdates(regs)
   }
 
   override def factory: UtilitiesFactory[CsrUtilities] = CsrUtilitiesFactory

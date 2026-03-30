@@ -10,5 +10,3 @@ _start:
     csrr x3, 0x300      # Read from mstatus
 
     csrr x4, 0xB00      # Read from mcycle
-
-    ebreak

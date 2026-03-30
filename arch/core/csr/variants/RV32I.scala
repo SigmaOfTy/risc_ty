@@ -167,6 +167,20 @@ object RV32ICsrUtilities extends RegisteredUtilities[CsrUtilities] with RV32ICsr
         "mcause"  -> cause
       )
     }
+
+    override def getTrapReturnTarget(regs: Map[String, UInt]): UInt =
+      regs.getOrElse("mepc", 0.U)
+
+    override def getTrapReturnUpdates(regs: Map[String, UInt]): Map[String, UInt] = {
+      val mstatus = regs.getOrElse("mstatus", 0.U)
+
+      val mpie        = mstatus(7)
+      val new_mstatus = Cat(mstatus(31, 8), 1.U(1.W), mstatus(6, 4), mpie, mstatus(2, 0))
+
+      Map(
+        "mstatus" -> new_mstatus
+      )
+    }
   }
 
   override def factory: UtilitiesFactory[CsrUtilities] = CsrUtilitiesFactory
