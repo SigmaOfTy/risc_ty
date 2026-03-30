@@ -50,6 +50,9 @@ class DecodedOutput(implicit p: Parameters) extends Bundle {
   val mul_high     = Bool()
   val mul_a_signed = Bool()
   val mul_b_signed = Bool()
+
+  // system
+  val ret = Bool()
 }
 
 trait DecoderUtilities extends Utilities {

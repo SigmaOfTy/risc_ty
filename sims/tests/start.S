@@ -8,5 +8,4 @@ _start:
     mv fp, zero
     jal ra, main
 
-    ebreak
     j .

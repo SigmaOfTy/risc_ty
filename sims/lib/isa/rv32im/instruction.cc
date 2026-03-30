@@ -227,12 +227,16 @@ std::string Instruction::mnemonic() const noexcept {
     return "auipc";
 
   case 0b1110011:
-    if (raw_ == 0x00000073) {
+    if (raw_ == 0x00000073)
       return "ecall";
-    }
-    if (raw_ == EBREAK) {
+    if (raw_ == EBREAK)
       return "ebreak";
-    }
+    if (raw_ == 0x00200073)
+      return "uret";
+    if (raw_ == 0x10200073)
+      return "sret";
+    if (raw_ == 0x30200073)
+      return "mret";
     switch (funct3_) {
     case 0b001:
       return "csrrw";
@@ -296,7 +300,8 @@ auto Instruction::to_string() const -> std::string {
     break;
 
   case SYSTEM:
-    if (raw_ == 0x00000073 || raw_ == EBREAK) {
+    if (raw_ == 0x00000073 || raw_ == EBREAK || raw_ == 0x00200073 ||
+        raw_ == 0x10200073 || raw_ == 0x30200073) {
       oss << "";
     } else if (funct3_ <= 0b011) {
       oss << "x" << static_cast<int>(rd_) << ", x" << static_cast<int>(rs1_)

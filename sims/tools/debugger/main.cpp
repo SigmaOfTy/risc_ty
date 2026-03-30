@@ -49,8 +49,13 @@ protected:
 
 #if defined(__ISA_RV32I__) || defined(__ISA_RV32IM__)
     const auto *clint_r = config_->find_region("clint");
+    demu::hal::InterruptLine timer_irq;
+    demu::hal::InterruptLine soft_irq;
 
-    device_manager_->register_device<demu::hal::axi::AXIFullCLINT>(3, *clint_r);
+    device_manager_->register_device<demu::hal::axi::AXIFullCLINT>(
+        3, *clint_r, &timer_irq, &soft_irq);
+    dut_->irq_timer_irq = timer_irq.get_level();
+    dut_->irq_soft_irq = soft_irq.get_level();
 
     device_manager_->register_handler(
         3, std::make_unique<demu::hal::axi::AXIFullPortHandler>(

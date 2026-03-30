@@ -25,11 +25,15 @@ trait CsrUtilities extends Utilities {
   def table: Seq[(Register, CsrUpdateBehavior)]
   def extraInputs: Seq[(String, Int)]
 
-  // Generic Trap/Interrupt Interface
+  // Trap Interrupt Interface
   def checkInterrupts(regs: Map[String, UInt], extra: Map[String, UInt]): (Bool, UInt, UInt) =
     (false.B, 0.U, 0.U)
   def getTrapUpdates(regs: Map[String, UInt], pc: UInt, cause: UInt): Map[String, UInt]      =
     Map.empty[String, UInt]
+
+  // Trap Return Interface
+  def getTrapReturnTarget(regs: Map[String, UInt]): UInt               = 0.U
+  def getTrapReturnUpdates(regs: Map[String, UInt]): Map[String, UInt] = Map.empty
 }
 
 object CsrUtilitiesFactory extends UtilitiesFactory[CsrUtilities]("CSR")

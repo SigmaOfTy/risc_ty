@@ -21,5 +21,3 @@ label1:
 
 label2:
     addi x5, x5, 1     # x5 = 1 (success)
-    
-    ebreak

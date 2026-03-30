@@ -99,6 +99,7 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
     .field("mul_b_signed", 1)
     .field("lsu", 1)
     .field("lsu_cmd", lsu_utils.cmdWidth)
+    .field("trap_ret", 1)
     .addFieldsWhen(p(EnableCSR))(
       Seq(
         PipelineField("csr", 1),
@@ -140,6 +141,9 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   val take_trap = csrfile.map(_.trap_request).getOrElse(false.B)
   val trap_addr = csrfile.map(_.trap_target).getOrElse(0.U(p(XLen).W))
 
+  val take_trap_ret = id_ex("trap_ret").asBool && !id_ex.stall && !take_trap
+  val trap_ret_addr = csrfile.map(_.trap_ret_target).getOrElse(0.U(p(XLen).W))
+
   // Performance counter
   val cycle_count   = RegInit(0.U(64.W))
   val instret_count = RegInit(0.U(64.W))
@@ -166,9 +170,8 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   ifu.load_use_hazard := load_use_hazard
   ifu.lsu_busy        := lsu.busy
 
-  // Wire Trap directly to IFU
-  ifu.take_trap   := take_trap
-  ifu.trap_target := trap_addr
+  ifu.take_trap   := take_trap || take_trap_ret
+  ifu.trap_target := Mux(take_trap, trap_addr, trap_ret_addr)
 
   bpu.update.valid  := bru.en
   bpu.update.pc     := if_id("pc")
@@ -267,6 +270,7 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   id_ex.drive("mul_b_signed", decoder.decoded.mul_b_signed)
   id_ex.drive("lsu", decoder.decoded.lsu)
   id_ex.drive("lsu_cmd", decoder.decoded.lsu_cmd)
+  id_ex.drive("trap_ret", decoder.decoded.ret)
   id_ex.driveOpt("csr", decoder.decoded.csr)
   id_ex.driveOpt("csr_cmd", decoder.decoded.csr_cmd)
   id_ex.driveOpt("csr_addr", csr_addr)
@@ -320,14 +324,10 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   alu.fnType := id_ex("alu_fn")
   alu.mode   := id_ex("alu_mode")
 
-  // MUL state (blocking version)
+  // MUL state
   val mul_req      = id_ex("mul_en").asBool
   val mul_inflight = RegInit(false.B)
-
-  // pure combinational stall to hold EX when mul pending
   mul_stall := mul_req && !mul.io.done
-
-  // one-shot fire when entering mul and multiplier not already inflight
   val mul_fire = mul_req && !mul_inflight && !mul.io.done
 
   when(id_ex.flush) {
@@ -338,7 +338,6 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
     mul_inflight := false.B
   }
 
-  // MUL IO
   mul.io.en       := mul_fire
   mul.io.kill     := id_ex.flush
   mul.io.src1     := ex_rs1_data
@@ -348,12 +347,13 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   mul.io.high     := id_ex("mul_high").asBool
 
   csrfile.foreach { csr =>
-    csr.en   := id_ex("csr").asBool
-    csr.cmd  := id_ex("csr_cmd")
-    csr.addr := id_ex("csr_addr")
-    csr.src  := ex_rs1_data
-    csr.imm  := id_ex("csr_imm")
-    csr.pc   := id_ex("pc")
+    csr.en       := id_ex("csr").asBool && !take_trap
+    csr.trap_ret := id_ex("trap_ret").asBool && !take_trap
+    csr.cmd      := id_ex("csr_cmd")
+    csr.addr     := id_ex("csr_addr")
+    csr.src      := ex_rs1_data
+    csr.imm      := id_ex("csr_imm")
+    csr.pc       := id_ex("pc")
   }
 
   // EX/MEM pipeline
