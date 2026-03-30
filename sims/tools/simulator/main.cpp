@@ -46,6 +46,20 @@ protected:
                  MAP_AXIF_SIGNALS(dut_, s, 2);
                  return s;
                }));
+
+#if defined(__ISA_RV32I__) || defined(__ISA_RV32IM__)
+    const auto *clint_r = config_->find_region("clint");
+
+    device_manager_->register_device<demu::hal::axi::AXIFullCLINT>(3, *clint_r);
+
+    device_manager_->register_handler(
+        3, std::make_unique<demu::hal::axi::AXIFullPortHandler>(
+               [this]() -> demu::hal::axi::AXIFullSignals {
+                 demu::hal::axi::AXIFullSignals s;
+                 MAP_AXIF_SIGNALS(dut_, s, 3);
+                 return s;
+               }));
+#endif
   };
 
   void on_init() override {}
