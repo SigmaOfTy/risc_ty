@@ -76,7 +76,7 @@ wait_for_timer_irq:
     # 4. Finish Test
     # -------------------------------------------------------------------------
     # If we reach here, both interrupts fired perfectly!
-    ebreak
+    j .
 
 
 # -----------------------------------------------------------------------------
@@ -96,7 +96,7 @@ trap_handler:
     beq x28, x29, handle_timer_irq
 
     # If it's something else (Exception), just halt
-    ebreak
+    j .
 
 handle_soft_irq:
     # 1. Acknowledge: Clear MSIP by writing 0 to the CLINT
@@ -108,17 +108,15 @@ handle_soft_irq:
     j trap_end
 
 handle_timer_irq:
-    # 1. Acknowledge: Clear MTIP by pushing mtimecmp to max value (0xFFFFFFFF)
-    li x31, -1                # -1 is 0xFFFFFFFF
-    
+    li x31, -1                
     li x30, CLINT_MTIMECMP_LO
     sw x31, 0(x30)
-    
     li x30, CLINT_MTIMECMP_HI
     sw x31, 0(x30)
     
-    # 2. Set success flag for the main thread
-    li x4, 1                  # Set x4 = 1
+    lw x0, 0(x30) 
+    
+    li x4, 1                  
     j trap_end
 
 trap_end:
