@@ -13,6 +13,9 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
     override def busType: Bundle =
       new AXIFullMasterIO(addrWidth = p(XLen), dataWidth = p(XLen), idWidth = 4)
 
+    def safeIdx(idx: UInt, size: Int): UInt =
+      if (size <= 1) 0.U else idx(log2Ceil(size) - 1, 0)
+
     override def createBridge[T <: Data](gen: T, memory: CacheIO[T]): Bundle = {
       val axi = Wire(new AXIFullMasterIO(addrWidth = p(XLen), dataWidth = p(XLen), idWidth = 4))
 
@@ -40,8 +43,8 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       val aw_sent = RegInit(false.B)
       val ar_sent = RegInit(false.B)
 
-      val w_beat_count = RegInit(0.U(log2Ceil(wordsPerRequest + 1).W))
-      val r_beat_count = RegInit(0.U(log2Ceil(wordsPerRespond + 1).W))
+      val w_beat_count = RegInit(0.U(log2Ceil(wordsPerRequest + 1).max(1).W))
+      val r_beat_count = RegInit(0.U(log2Ceil(wordsPerRespond + 1).max(1).W))
 
       val r_data_buffer = Reg(Vec(wordsPerRespond, UInt(p(XLen).W)))
 
@@ -86,12 +89,12 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
 
       // AW
       axi.aw.valid       := (is_new_req && isWrite) || (active_write && !aw_sent)
-      axi.aw.bits.addr   := Mux(is_new_req, w_start_addr, req_addr) // Block aligned
+      axi.aw.bits.addr   := Mux(is_new_req, w_start_addr, req_addr)
       axi.aw.bits.prot   := 0.U
       axi.aw.bits.id     := 0.U
       axi.aw.bits.len    := writeBurstLen
       axi.aw.bits.size   := log2Ceil(bytesPerWord).U
-      axi.aw.bits.burst  := 1.U                                     // INCR
+      axi.aw.bits.burst  := 1.U // INCR
       axi.aw.bits.lock   := false.B
       axi.aw.bits.cache  := 0.U
       axi.aw.bits.qos    := 0.U
@@ -105,9 +108,11 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       val rt_data_vec = VecInit((0 until wordsPerRequest).map(i => send_data((i + 1) * p(XLen) - 1, i * p(XLen))))
       val rt_strb_vec = VecInit((0 until wordsPerRequest).map(i => send_strb((i + 1) * bytesPerWord - 1, i * bytesPerWord)))
 
+      val w_idx = safeIdx(Mux(w_in_bounds, w_beat_count, 0.U), wordsPerRequest)
+
       axi.w.valid     := current_active_write && w_in_bounds
-      axi.w.bits.data := rt_data_vec(Mux(w_in_bounds, w_beat_count, 0.U))
-      axi.w.bits.strb := rt_strb_vec(Mux(w_in_bounds, w_beat_count, 0.U))
+      axi.w.bits.data := rt_data_vec(w_idx)
+      axi.w.bits.strb := rt_strb_vec(w_idx)
       axi.w.bits.last := w_last
       axi.w.bits.id   := 0.U
       axi.w.bits.user := 0.U
@@ -121,10 +126,11 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
 
       val r_last              = axi.r.bits.last || (r_beat_count === readBurstLen)
       val current_active_read = active_read || (is_new_req && isRead)
+      val r_idx_write         = safeIdx(r_beat_count, wordsPerRespond)
 
       when(current_active_read && axi.r.fire) {
         when(r_beat_count < wordsPerRespond.U) {
-          r_data_buffer(r_beat_count) := axi.r.bits.data
+          r_data_buffer(r_idx_write) := axi.r.bits.data
         }
         when(!r_last) {
           r_beat_count := r_beat_count + 1.U
@@ -137,12 +143,12 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       }
 
       axi.ar.valid       := (is_new_req && isRead) || (active_read && !ar_sent)
-      axi.ar.bits.addr   := Mux(is_new_req, r_start_addr, req_addr) // Block aligned
+      axi.ar.bits.addr   := Mux(is_new_req, r_start_addr, req_addr)
       axi.ar.bits.prot   := 0.U
       axi.ar.bits.id     := 0.U
       axi.ar.bits.len    := readBurstLen
       axi.ar.bits.size   := log2Ceil(bytesPerWord).U
-      axi.ar.bits.burst  := 1.U                                     // INCR
+      axi.ar.bits.burst  := 1.U
       axi.ar.bits.lock   := false.B
       axi.ar.bits.cache  := 0.U
       axi.ar.bits.qos    := 0.U
@@ -156,8 +162,10 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       memory.resp.valid := w_complete || r_complete
 
       val final_data_vec = Wire(Vec(wordsPerRespond, UInt(p(XLen).W)))
-      for (i <- 0 until wordsPerRespond)
-        final_data_vec(i) := Mux(current_active_read && axi.r.fire && r_beat_count === i.U, axi.r.bits.data, r_data_buffer(i))
+      for (i <- 0 until wordsPerRespond) {
+        val hit_idx = current_active_read && axi.r.fire && r_beat_count === i.U
+        final_data_vec(i) := Mux(hit_idx, axi.r.bits.data, r_data_buffer(safeIdx(i.U, wordsPerRespond)))
+      }
 
       memory.resp.bits.data := Cat(final_data_vec.reverse).asTypeOf(memory.resp.bits.data)
       memory.resp.bits.hit  := true.B
@@ -178,13 +186,13 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       val active_read = RegInit(false.B)
       val ar_sent     = RegInit(false.B)
 
-      val r_beat_count  = RegInit(0.U(log2Ceil(wordsPerRespond + 1).W))
+      val r_beat_count  = RegInit(0.U(log2Ceil(wordsPerRespond + 1).max(1).W))
       val r_data_buffer = Reg(Vec(wordsPerRespond, UInt(p(XLen).W)))
 
       memory.req.ready := !active_read
 
       val is_new_req = memory.req.valid && !active_read
-      val start_addr = memory.req.bits.addr & blockMask // Block aligned
+      val start_addr = memory.req.bits.addr & blockMask
 
       when(is_new_req) {
         req_addr     := start_addr
@@ -197,10 +205,11 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
 
       val r_last              = axi.r.bits.last || (r_beat_count === readBurstLen)
       val current_active_read = active_read || is_new_req
+      val r_idx_write         = safeIdx(r_beat_count, wordsPerRespond)
 
       when(current_active_read && axi.r.fire) {
         when(r_beat_count < wordsPerRespond.U) {
-          r_data_buffer(r_beat_count) := axi.r.bits.data
+          r_data_buffer(r_idx_write) := axi.r.bits.data
         }
         when(!r_last) {
           r_beat_count := r_beat_count + 1.U
@@ -220,12 +229,12 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       axi.b.ready     := false.B
 
       axi.ar.valid       := is_new_req || (active_read && !ar_sent)
-      axi.ar.bits.addr   := Mux(is_new_req, start_addr, req_addr) // Block aligned
+      axi.ar.bits.addr   := Mux(is_new_req, start_addr, req_addr)
       axi.ar.bits.prot   := 0.U
       axi.ar.bits.id     := 0.U
       axi.ar.bits.len    := readBurstLen
       axi.ar.bits.size   := log2Ceil(bytesPerWord).U
-      axi.ar.bits.burst  := 1.U                                   // INCR
+      axi.ar.bits.burst  := 1.U
       axi.ar.bits.lock   := false.B
       axi.ar.bits.cache  := 0.U
       axi.ar.bits.qos    := 0.U
@@ -237,8 +246,10 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       memory.resp.valid := r_complete
 
       val final_data_vec = Wire(Vec(wordsPerRespond, UInt(p(XLen).W)))
-      for (i <- 0 until wordsPerRespond)
-        final_data_vec(i) := Mux(current_active_read && axi.r.fire && r_beat_count === i.U, axi.r.bits.data, r_data_buffer(i))
+      for (i <- 0 until wordsPerRespond) {
+        val hit_idx = current_active_read && axi.r.fire && r_beat_count === i.U
+        final_data_vec(i) := Mux(hit_idx, axi.r.bits.data, r_data_buffer(safeIdx(i.U, wordsPerRespond)))
+      }
 
       memory.resp.bits.data := Cat(final_data_vec.reverse).asTypeOf(memory.resp.bits.data)
       memory.resp.bits.hit  := true.B
