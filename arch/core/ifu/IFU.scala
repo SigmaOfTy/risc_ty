@@ -49,9 +49,10 @@ class Ifu(implicit p: Parameters) extends Module {
   val do_redirect       = take_trap || bru_taken || bru_not_taken
   val reset_ibuffer_reg = RegInit(false.B)
 
-  val inflight_reset = reset.asBool || do_redirect
-  val inflight_q     = withReset(inflight_reset) {
-    Module(new Queue(new FetchMeta, 4))
+  val inflight_q = Module(new Queue(new FetchMeta, 4))
+
+  when(do_redirect) {
+    inflight_q.reset := true.B
   }
 
   fetch_pc          := pc
@@ -73,7 +74,7 @@ class Ifu(implicit p: Parameters) extends Module {
     pc := Mux(bpu_taken_in, bpu_target_in, pc + 4.U(p(XLen).W))
   }
 
-  // Handle Cache Responses
+  // Handle responses
   val valid_resp = mem.resp.valid && inflight_q.io.deq.valid
 
   ibuffer.enq.valid                := valid_resp && !ibuffer.full
