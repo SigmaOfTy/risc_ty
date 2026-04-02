@@ -218,42 +218,41 @@ void DemuSimulator::clock_tick() {
 #endif
 
   context_->timeInc(1);
-
   dut_->clock = 1;
   dut_->eval();
 
   device_manager_->clock_tick();
-
   handle_interrupt();
-  dut_->eval();
-
   handle_cache_profiling();
 
-  if (dut_->debug_reg_addr != 0) {
-    if (dut_->debug_reg_we) {
-      auto reg_data = static_cast<word_t>(dut_->debug_reg_data);
-      _register_values[dut_->debug_reg_addr] = reg_data;
-      DEMU_REG_WRITE(dut_->debug_reg_addr, reg_data);
-    }
+  const auto reg_addr = dut_->debug_reg_addr;
+  if (reg_addr != 0 && dut_->debug_reg_we) {
+    const auto reg_data = static_cast<word_t>(dut_->debug_reg_data);
+    _register_values[reg_addr] = reg_data;
+    DEMU_REG_WRITE(reg_addr, reg_data);
   }
 
-  if (show_pipeline_) {
+  if (__builtin_expect(show_pipeline_, 0)) {
     DEMU_DEBUG("PIPE | IF:{:08x} ID:{:08x} EX:{:08x} MEM:{:08x} WB:{:08x}",
                dut_->debug_if_instr, dut_->debug_id_instr, dut_->debug_ex_instr,
                dut_->debug_mem_instr, dut_->debug_wb_instr);
   }
 
-  if (dut_->debug_branch_taken) {
+  if (__builtin_expect(static_cast<bool>(dut_->debug_branch_taken), 0)) {
     DEMU_TRACE("[BRANCH] Taken: 0x{:08x} -> 0x{:08x}",
                dut_->debug_branch_source, dut_->debug_branch_target);
   }
 
-  if (dut_->debug_instret) {
-    Instruction inst(static_cast<instr_t>(dut_->debug_instr));
-    DEMU_INFO("RETIRE | Cycle {:6d} | PC=0x{:08x} | Inst=0x{:08x} ({})",
-              cycle_count(), static_cast<addr_t>(dut_->debug_pc),
-              dut_->debug_instr, inst.to_string());
+  if (__builtin_expect(static_cast<bool>(dut_->debug_instret), 0)) {
+    auto &logger = ::demu::Logger::getDemuLogger();
+    if (logger->should_log(spdlog::level::info)) {
+      Instruction inst(static_cast<instr_t>(dut_->debug_instr));
+      DEMU_INFO("RETIRE | Cycle {:6d} | PC=0x{:08x} | Inst=0x{:08x} ({})",
+                cycle_count(), static_cast<addr_t>(dut_->debug_pc),
+                dut_->debug_instr, inst.to_string());
+    }
   }
+
   on_clock_tick();
 
 #ifdef ENABLE_TRACE
