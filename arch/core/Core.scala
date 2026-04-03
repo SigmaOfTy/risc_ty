@@ -236,7 +236,7 @@ class RiscCore(implicit p: Parameters) extends Module with ForwardingConsts with
   bru.brType := decoder.decoded.br_type
 
   // Load-use hazard
-  load_use_hazard := lsu_utils.isMemRead(id_ex("lsu").asBool, id_ex("lsu_cmd")) &&
+  load_use_hazard := (id_ex("lsu").asBool && lsu_utils.isRead(id_ex("lsu_cmd"))) &&
     ((id_ex("rd") === rs1) || (id_ex("rd") === rs2)) &&
     id_ex("rd") =/= 0.U
 

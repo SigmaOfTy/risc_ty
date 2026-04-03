@@ -14,8 +14,6 @@ object RV32IMLsuUtilities extends RegisteredUtilities[LsuUtilities] with RV32ILs
     override def isUnsigned(cmd: UInt): Bool               = RV32ILsuUtilities.utils.isUnsigned(cmd)
     override def isRead(cmd: UInt): Bool                   = RV32ILsuUtilities.utils.isRead(cmd)
     override def isWrite(cmd: UInt): Bool                  = RV32ILsuUtilities.utils.isWrite(cmd)
-    override def isMemRead(is_mem: Bool, cmd: UInt): Bool  = RV32ILsuUtilities.utils.isMemRead(is_mem, cmd)
-    override def isMemWrite(is_mem: Bool, cmd: UInt): Bool = RV32ILsuUtilities.utils.isMemWrite(is_mem, cmd)
   }
 
   override def factory: UtilitiesFactory[LsuUtilities] = LsuUtilitiesFactory
