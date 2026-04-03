@@ -232,12 +232,6 @@ void DemuSimulator::clock_tick() {
     DEMU_REG_WRITE(reg_addr, reg_data);
   }
 
-  if (__builtin_expect(show_pipeline_, 0)) {
-    DEMU_DEBUG("PIPE | IF:{:08x} ID:{:08x} EX:{:08x} MEM:{:08x} WB:{:08x}",
-               dut_->debug_if_instr, dut_->debug_id_instr, dut_->debug_ex_instr,
-               dut_->debug_mem_instr, dut_->debug_wb_instr);
-  }
-
   if (__builtin_expect(static_cast<bool>(dut_->debug_branch_taken), 0)) {
     DEMU_TRACE("[BRANCH] Taken: 0x{:08x} -> 0x{:08x}",
                dut_->debug_branch_source, dut_->debug_branch_target);

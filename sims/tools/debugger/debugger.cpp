@@ -41,8 +41,6 @@ void Debugger::register_commands() {
        [this](auto &a) -> auto { cmd_info(a); }},
       {"print", "p", "Print a register value.", "print <reg>",
        [this](auto &a) -> auto { cmd_print(a); }},
-      {"pipeline", "pl", "Show pipeline stage instructions.", "pipeline",
-       [this](auto &a) -> auto { cmd_pipeline(a); }},
       {"display", "dp", "Auto-display register at every stop.", "display <reg>",
        [this](auto &a) -> auto { cmd_display(a); }},
       {"undisplay", "ud", "Remove auto-display for register.",
@@ -116,7 +114,7 @@ auto Debugger::parse_reg(const std::string &s) -> int {
   }
 
   try {
-    unsigned long val = std::stoul(num_str);
+    uint64_t val = std::stoul(num_str);
     if (val < NUM_GPRS) {
       return static_cast<int>(val);
     }
@@ -504,14 +502,6 @@ void Debugger::cmd_print(const std::vector<std::string> &args) {
   }
 
   fmt::print("  x{} = 0x{:08x}\n", r, sim_.reg(r));
-}
-
-void Debugger::cmd_pipeline(const std::vector<std::string> &) {
-  fmt::print("  IF  : 0x{:08x}\n", sim_.if_instr());
-  fmt::print("  ID  : 0x{:08x}\n", sim_.id_instr());
-  fmt::print("  EX  : 0x{:08x}\n", sim_.ex_instr());
-  fmt::print("  MEM : 0x{:08x}\n", sim_.mem_instr());
-  fmt::print("  WB  : 0x{:08x}\n", sim_.wb_instr());
 }
 
 void Debugger::cmd_display(const std::vector<std::string> &args) {
