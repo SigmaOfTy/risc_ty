@@ -39,8 +39,8 @@ class Lsu(implicit p: Parameters) extends Module {
 
   rdata     := 0.U(p(XLen).W)
   unsigned  := en && utils.isUnsigned(cmd)
-  mem_read  := utils.isMemRead(en, cmd)
-  mem_write := utils.isMemWrite(en, cmd)
+  mem_read  := en && utils.isRead(cmd)
+  mem_write := en && utils.isWrite(cmd)
 
   val raw_wdata = MuxCase(
     wdata,

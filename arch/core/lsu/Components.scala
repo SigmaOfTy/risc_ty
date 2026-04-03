@@ -13,8 +13,6 @@ trait LsuUtilities extends Utilities {
   def isUnsigned(cmd: UInt): Bool
   def isRead(cmd: UInt): Bool
   def isWrite(cmd: UInt): Bool
-  def isMemRead(is_mem: Bool, cmd: UInt): Bool
-  def isMemWrite(is_mem: Bool, cmd: UInt): Bool
 }
 
 object LsuUtilitiesFactory extends UtilitiesFactory[LsuUtilities]("LSU")
