@@ -55,7 +55,6 @@ private:
   void cmd_disable(const std::vector<std::string> &args);
   void cmd_info(const std::vector<std::string> &args);
   void cmd_print(const std::vector<std::string> &args);
-  void cmd_pipeline(const std::vector<std::string> &args);
   void cmd_display(const std::vector<std::string> &args);
   void cmd_undisplay(const std::vector<std::string> &args);
   void cmd_memory(const std::vector<std::string> &args);

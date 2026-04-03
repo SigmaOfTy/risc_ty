@@ -49,25 +49,9 @@ public:
     auto it = _register_values.find(reg);
     return it != _register_values.end() ? it->second : 0;
   };
-  [[nodiscard]] auto if_instr() const noexcept -> instr_t {
-    return static_cast<instr_t>(dut_->debug_if_instr);
-  }
-  [[nodiscard]] auto id_instr() const noexcept -> instr_t {
-    return static_cast<instr_t>(dut_->debug_id_instr);
-  }
-  [[nodiscard]] auto ex_instr() const noexcept -> instr_t {
-    return static_cast<instr_t>(dut_->debug_ex_instr);
-  }
-  [[nodiscard]] auto mem_instr() const noexcept -> instr_t {
-    return static_cast<instr_t>(dut_->debug_mem_instr);
-  }
-  [[nodiscard]] auto wb_instr() const noexcept -> instr_t {
-    return static_cast<instr_t>(dut_->debug_wb_instr);
-  }
 
   // Simulator configuration
   void timeout(uint64_t timeout) noexcept { timeout_ = timeout; }
-  void show_pipeline(bool show) noexcept { show_pipeline_ = show; }
 
   // Simulator statistics
   [[nodiscard]] auto cycle_count() const noexcept -> uint64_t {
@@ -115,7 +99,6 @@ protected:
 #endif
 
   uint64_t timeout_{1000000};
-  bool show_pipeline_{false};
   bool trace_enabled_{false};
 
   // Simulator state

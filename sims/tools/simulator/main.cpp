@@ -82,8 +82,6 @@ void print_usage(const char *prog) {
   std::cout
       << "  -d, --dump-regs               Dump registers after execution\n";
   std::cout << "  -m, --dump-mem <addr> <size>  Dump memory region\n";
-  std::cout
-      << "  -p, --show-pipeline           Show pipeline state each cycle\n";
   std::cout << "  -L12345,                      Set log level (5=error, "
                "4=warn, 3=info, 2=debug, 1=trace)\n";
   std::cout << "  +<arg>                        Native Verilator arguments "
@@ -103,7 +101,6 @@ auto main(int argc, char **argv) -> int {
   std::string program_file;
   bool enable_trace = false;
   bool dump_regs = false;
-  bool show_pipeline = false;
   int threads = 1;
   uint64_t max_cycles = 0;
   uint32_t base_addr = 0;
@@ -140,8 +137,6 @@ auto main(int argc, char **argv) -> int {
         dump_mem_size = std::stoul(argv[++i], nullptr, 16);
         dump_mem = true;
       }
-    } else if (arg == "-p" || arg == "--show-pipeline") {
-      show_pipeline = true;
     } else if (arg[0] == '-' && arg.length() > 1 && arg[1] == 'L') {
       int log_level = std::stoi(arg.substr(2));
       switch (log_level) {
@@ -182,7 +177,6 @@ auto main(int argc, char **argv) -> int {
   demu::Logger::init(spdlog_level);
 
   DemuSimulatorTop sim(enable_trace, threads, argc, argv);
-  sim.show_pipeline(show_pipeline);
 
   sim.init();
   sim.reset();

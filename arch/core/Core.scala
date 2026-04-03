@@ -252,7 +252,7 @@ class RiscCore(implicit p: Parameters) extends Module with AluConsts {
   id_ex.flush :=
     ((load_use_hazard || sb_stall ||
       ((bru_mispredict_taken || bru_mispredict_not_taken) && !bru.jump)) &&
-      !lsu.busy) || take_trap
+      !lsu.busy && !mul_stall) || take_trap
 
   id_ex.drive("instr", if_id("instr"))
   id_ex.drive("pc", if_id("pc"))
@@ -442,12 +442,6 @@ class RiscCore(implicit p: Parameters) extends Module with AluConsts {
   val debug_branch_source = IO(Output(UInt(p(XLen).W)))
   val debug_branch_target = IO(Output(UInt(p(XLen).W)))
 
-  val debug_if_instr  = IO(Output(UInt(p(ILen).W)))
-  val debug_id_instr  = IO(Output(UInt(p(ILen).W)))
-  val debug_ex_instr  = IO(Output(UInt(p(ILen).W)))
-  val debug_mem_instr = IO(Output(UInt(p(ILen).W)))
-  val debug_wb_instr  = IO(Output(UInt(p(ILen).W)))
-
   val debug_l1_icache_access = IO(Output(Bool()))
   val debug_l1_icache_miss   = IO(Output(Bool()))
   val debug_l1_dcache_access = IO(Output(Bool()))
@@ -465,16 +459,6 @@ class RiscCore(implicit p: Parameters) extends Module with AluConsts {
   debug_branch_taken  := bru.taken
   debug_branch_source := bru.pc
   debug_branch_target := bru.target
-
-  debug_if_instr  := Mux(
-    ifu.ibuffer_deq_fire && !ifu.reset_ibuffer,
-    ifu.if_instr,
-    p(Bubble).value.U(p(ILen).W)
-  )
-  debug_id_instr  := if_id("instr")
-  debug_ex_instr  := id_ex("instr")
-  debug_mem_instr := ex_wb("instr")
-  debug_wb_instr  := ex_wb("instr")
 
   debug_l1_icache_access := RegNext(l1_icache.upper.req.fire)
   debug_l1_icache_miss   := !l1_icache.upper.resp.bits.hit

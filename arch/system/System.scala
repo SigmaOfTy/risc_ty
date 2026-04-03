@@ -50,12 +50,6 @@ class RiscSystem(implicit p: Parameters) extends Module {
   val debug_branch_source = IO(Output(UInt(p(XLen).W)))
   val debug_branch_target = IO(Output(UInt(p(XLen).W)))
 
-  val debug_if_instr  = IO(Output(UInt(p(ILen).W)))
-  val debug_id_instr  = IO(Output(UInt(p(ILen).W)))
-  val debug_ex_instr  = IO(Output(UInt(p(ILen).W)))
-  val debug_mem_instr = IO(Output(UInt(p(ILen).W)))
-  val debug_wb_instr  = IO(Output(UInt(p(ILen).W)))
-
   val debug_l1_icache_access = IO(Output(Bool()))
   val debug_l1_icache_miss   = IO(Output(Bool()))
   val debug_l1_dcache_access = IO(Output(Bool()))
@@ -73,12 +67,6 @@ class RiscSystem(implicit p: Parameters) extends Module {
   debug_branch_taken  := cpu.debug_branch_taken
   debug_branch_source := cpu.debug_branch_source
   debug_branch_target := cpu.debug_branch_target
-
-  debug_if_instr  := cpu.debug_if_instr
-  debug_id_instr  := cpu.debug_id_instr
-  debug_ex_instr  := cpu.debug_ex_instr
-  debug_mem_instr := cpu.debug_mem_instr
-  debug_wb_instr  := cpu.debug_wb_instr
 
   debug_l1_icache_access := cpu.debug_l1_icache_access
   debug_l1_icache_miss   := cpu.debug_l1_icache_miss
