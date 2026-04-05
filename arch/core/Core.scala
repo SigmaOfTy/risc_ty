@@ -19,13 +19,13 @@ import chisel3._
 import chisel3.util.{ log2Ceil, MuxLookup, MuxCase }
 
 class RiscCore(implicit p: Parameters) extends Module with AluConsts {
-  override def desiredName: String = s"${p(ISA)}_cpu"
+  override def desiredName: String = s"${p(ISA).name}_cpu"
 
-  val alu_utils     = AluUtilitiesFactory.getOrThrow(p(ISA))
-  val bru_utils     = BruUtilitiesFactory.getOrThrow(p(ISA))
-  val regfile_utils = RegfileUtilitiesFactory.getOrThrow(p(ISA))
-  val lsu_utils     = LsuUtilitiesFactory.getOrThrow(p(ISA))
-  val csr_utils     = CsrUtilitiesFactory.getOrThrow(p(ISA))
+  val alu_utils     = AluUtilitiesFactory.getOrThrow(p(ISA).name)
+  val bru_utils     = BruUtilitiesFactory.getOrThrow(p(ISA).name)
+  val regfile_utils = RegfileUtilitiesFactory.getOrThrow(p(ISA).name)
+  val lsu_utils     = LsuUtilitiesFactory.getOrThrow(p(ISA).name)
+  val csr_utils     = CsrUtilitiesFactory.getOrThrow(p(ISA).name)
 
   private val FU_ALU  = FUInit.ALU
   private val FU_MULT = FUInit.MULT

@@ -11,7 +11,7 @@ class PipelineStage(
     extends Module
     with HasPipelineFields {
 
-  override def desiredName: String = s"${p(ISA)}_$stageName"
+  override def desiredName: String = s"${p(ISA).name}_$stageName"
 
   private val names = fields.map(_.name)
   require(

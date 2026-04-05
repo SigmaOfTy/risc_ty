@@ -6,9 +6,9 @@ import chisel3._
 import chisel3.util.{ MuxCase, Cat, Fill }
 
 class Lsu(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_lsu"
+  override def desiredName: String = s"${p(ISA).name}_lsu"
 
-  val utils = LsuUtilitiesFactory.getOrThrow(p(ISA))
+  val utils = LsuUtilitiesFactory.getOrThrow(p(ISA).name)
 
   // Control inputs
   val en            = IO(Input(Bool()))

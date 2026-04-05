@@ -4,7 +4,7 @@ import arch.configs._
 import chisel3._
 
 class Bpu(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_bpu"
+  override def desiredName: String = s"${p(ISA).name}_bpu"
 
   val query_pc = IO(Input(UInt(p(XLen).W)))
   val taken    = IO(Output(Bool()))

@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package risc;
+
+option java_package = "arch.configs.proto";
+option java_outer_classname = "FunctionalUnitProto";
+
+enum FunctionalUnitType {
+  FUNCTIONAL_UNIT_TYPE_UNSPECIFIED = 0;
+  FUNCTIONAL_UNIT_TYPE_ALU = 1;
+  FUNCTIONAL_UNIT_TYPE_MULT = 2;
+  FUNCTIONAL_UNIT_TYPE_LSU = 3;
+  FUNCTIONAL_UNIT_TYPE_CSR = 4;
+}
+
+message FunctionalUnitDescriptor {
+  string name = 1;
+  FunctionalUnitType type = 2;
+}

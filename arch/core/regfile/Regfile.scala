@@ -6,9 +6,9 @@ import chisel3._
 import chisel3.util.log2Ceil
 
 class Regfile(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_regfile"
+  override def desiredName: String = s"${p(ISA).name}_regfile"
 
-  val utils = RegfileUtilitiesFactory.getOrThrow(p(ISA))
+  val utils = RegfileUtilitiesFactory.getOrThrow(p(ISA).name)
 
   val rs1_preg   = IO(Input(UInt(log2Ceil(p(NumPhyRegs)).W)))
   val rs2_preg   = IO(Input(UInt(log2Ceil(p(NumPhyRegs)).W)))

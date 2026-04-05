@@ -5,9 +5,9 @@ import vopts.utils.{ CombTree, Register }
 import chisel3._
 
 class CsrFile(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_csrfile"
+  override def desiredName: String = s"${p(ISA).name}_csrfile"
 
-  val utils = CsrUtilitiesFactory.getOrThrow(p(ISA))
+  val utils = CsrUtilitiesFactory.getOrThrow(p(ISA).name)
 
   val en   = IO(Input(Bool()))
   val cmd  = IO(Input(UInt(utils.cmdWidth.W)))
