@@ -4,7 +4,7 @@
 option(USE_CCACHE "Use ccache to speed up recompilation" ON)
 
 # settings
-set(ISA_TARGET "rv32i")
+set(ISA_TARGET "rv32im")
 set(RTL_DIR "${CMAKE_SOURCE_DIR}/../build")
 
 # options

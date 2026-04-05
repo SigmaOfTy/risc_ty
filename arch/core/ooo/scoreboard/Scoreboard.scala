@@ -6,7 +6,7 @@ import chisel3._
 import chisel3.util._
 
 class Scoreboard(implicit p: Parameters) extends Scheduler {
-  override def desiredName: String = s"${p(ISA).name}_superscalar_scoreboard"
+  override def desiredName: String = s"${p(ISA).name}_scoreboard"
 
   private val NUM_REGS = p(NumArchRegs)
   private val NO_PROD  = p(FunctionalUnits).size.U(log2Ceil(p(FunctionalUnits).size + 1).W)

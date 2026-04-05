@@ -13,6 +13,7 @@ import mult._
 import pipeline._
 import ooo._
 import arch.configs._
+import arch.configs.proto.FunctionalUnitType._
 import vopts.mem.cache.{ CacheIO, CacheReadOnlyIO, SetAssociativeCache, SetAssociativeCacheReadOnly }
 import chisel3._
 import chisel3.util.{ log2Ceil, MuxCase, RRArbiter }
@@ -38,25 +39,36 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   // Scheduler Initialization
   val scheduler = Scheduler()
-  val numFUs    = p(FunctionalUnits).size
 
-  val alu_fu  = Module(new AluFU)
-  val mult_fu = Module(new MultFU)
-  val lsu_fu  = Module(new LsuFU)
-  val csr_fu  = Module(new CsrFU)
+  // Dynamic Functional Unit Generation
+  var lsu_module: Option[LsuFU] = None
+  var csr_module: Option[CsrFU] = None
 
+  val fuMap = p(FunctionalUnits).map { fuDesc =>
+    fuDesc.`type` match {
+      case FUNCTIONAL_UNIT_TYPE_ALU  => Module(new AluFU).io
+      case FUNCTIONAL_UNIT_TYPE_MULT => Module(new MultFU).io
+      case FUNCTIONAL_UNIT_TYPE_LSU  =>
+        val lsu = Module(new LsuFU)
+        lsu_module = Some(lsu)
+        lsu.io
+      case FUNCTIONAL_UNIT_TYPE_CSR  =>
+        val csr = Module(new CsrFU)
+        csr_module = Some(csr)
+        csr.io
+      case _                         => throw new Exception(s"Unknown FunctionalUnitType: ${fuDesc.`type`}")
+    }
+  }
+
+  val lsu_fu = lsu_module.getOrElse(throw new Exception("LSU Unit is missing from configuration!"))
+  val csr_fu = csr_module.getOrElse(throw new Exception("CSR Unit is missing from configuration!"))
+
+  // System IO Wiring
   l1_dcache.upper <> lsu_fu.mem
   mmio <> lsu_fu.mmio
   dmem <> l1_dcache.lower
 
-  val fuMap = p(FunctionalUnits).map(_.name).map {
-    case "ALU_0"  => alu_fu.io
-    case "MULT_0" => mult_fu.io
-    case "LSU_0"  => lsu_fu.io
-    case "CSR"    => csr_fu.io
-  }
-
-  for (i <- 0 until numFUs)
+  for (i <- 0 until p(FunctionalUnits).size)
     fuMap(i).req <> scheduler.fu_reqs(i)
 
   // Fetch Stage
@@ -92,7 +104,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   val is_bubble = if_id("instr") === p(Bubble).value.U(p(ILen).W)
   val sb_ready  = scheduler.dis_reqs(0).ready
 
-  // Only fire events if the instruction successfully dispatches to the scoreboard
   val dispatch_fire = !is_bubble && !take_trap && sb_ready
 
   // Branch Unit Logic
@@ -133,12 +144,13 @@ class RiscCore(implicit p: Parameters) extends Module {
   if_id.drive("bpu_pred_taken", ifu.if_bpu_pred_taken)
   if_id.drive("bpu_pred_target", ifu.if_bpu_pred_target)
 
-  // Scoreboard Dispatch Array
-  val fuNames = p(FunctionalUnits).map(_.name)
-  val aluId   = fuNames.indexOf("ALU_0").U
-  val multId  = fuNames.indexOf("MULT_0").U
-  val lsuId   = fuNames.indexOf("LSU_0").U
-  val csrId   = fuNames.indexOf("CSR").U
+  // Scoreboard Dispatch Array & Routing
+  val fuTypes = p(FunctionalUnits).map(_.`type`)
+
+  val aluId  = fuTypes.indexOf(FUNCTIONAL_UNIT_TYPE_ALU).U
+  val multId = fuTypes.indexOf(FUNCTIONAL_UNIT_TYPE_MULT).U
+  val lsuId  = fuTypes.indexOf(FUNCTIONAL_UNIT_TYPE_LSU).U
+  val csrId  = fuTypes.indexOf(FUNCTIONAL_UNIT_TYPE_CSR).U
 
   val target_fu_id = MuxCase(
     aluId,
@@ -169,8 +181,8 @@ class RiscCore(implicit p: Parameters) extends Module {
   scheduler.flush := take_trap || take_trap_ret
 
   // Common Writeback Arbiter
-  val wb_arbiter = Module(new RRArbiter(new FunctionalUnitResp, numFUs))
-  for (i <- 0 until numFUs) {
+  val wb_arbiter = Module(new RRArbiter(new FunctionalUnitResp, p(FunctionalUnits).size))
+  for (i <- 0 until p(FunctionalUnits).size) {
     wb_arbiter.io.in(i) <> fuMap(i).resp
     fuMap(i).flush := take_trap || take_trap_ret
 
