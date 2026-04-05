@@ -46,9 +46,8 @@ public:
     return static_cast<addr_t>(dut_->debug_pc);
   };
   [[nodiscard]] auto reg(uint8_t reg) const noexcept -> word_t {
-    auto it = _register_values.find(reg);
-    return it != _register_values.end() ? it->second : 0;
-  };
+    return _register_values[reg];
+  }
 
   // Simulator configuration
   void timeout(uint64_t timeout) noexcept { timeout_ = timeout; }
@@ -109,7 +108,7 @@ protected:
   uint64_t _l1_dcache_accesses{0};
   uint64_t _l1_dcache_misses{0};
 
-  std::map<uint8_t, word_t> _register_values;
+  std::array<word_t, NUM_GPRS> _register_values{};
 
   // Internal simulation methods
   void clock_tick();
