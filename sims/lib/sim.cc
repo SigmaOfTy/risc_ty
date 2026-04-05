@@ -146,7 +146,7 @@ void DemuSimulator::reset() {
   _l1_dcache_misses = 0;
 
   _terminate = false;
-  _register_values.clear();
+  _register_values.fill(0);
 
   on_reset();
   DEMU_INFO("System Reset Complete. PC: 0x{:08x}",
@@ -226,7 +226,7 @@ void DemuSimulator::clock_tick() {
   handle_cache_profiling();
 
   const auto reg_addr = dut_->debug_reg_addr;
-  if (reg_addr != 0 && dut_->debug_reg_we) {
+  if (reg_addr < NUM_GPRS && dut_->debug_reg_we) {
     const auto reg_data = static_cast<word_t>(dut_->debug_reg_data);
     _register_values[reg_addr] = reg_data;
     DEMU_REG_WRITE(reg_addr, reg_data);
@@ -262,19 +262,12 @@ void DemuSimulator::handle_interrupt() {
 }
 
 void DemuSimulator::handle_cache_profiling() {
-  if (dut_->debug_l1_icache_access) {
-    _l1_icache_accesses++;
-    if (dut_->debug_l1_icache_miss) {
-      _l1_icache_misses++;
-    }
-  }
-
-  if (dut_->debug_l1_dcache_access) {
-    _l1_dcache_accesses++;
-    if (dut_->debug_l1_dcache_miss) {
-      _l1_dcache_misses++;
-    }
-  }
+  _l1_icache_accesses += static_cast<uint64_t>(dut_->debug_l1_icache_access);
+  _l1_icache_misses += static_cast<uint64_t>(dut_->debug_l1_icache_access &&
+                                             dut_->debug_l1_icache_miss);
+  _l1_dcache_accesses += static_cast<uint64_t>(dut_->debug_l1_dcache_access);
+  _l1_dcache_misses += static_cast<uint64_t>(dut_->debug_l1_dcache_access &&
+                                             dut_->debug_l1_dcache_miss);
 }
 
 } // namespace demu
