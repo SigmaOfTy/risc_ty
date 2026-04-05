@@ -1,11 +1,12 @@
 package arch.core.ooo
 
 import arch.configs._
+import arch.core.ooo.{ MicroOp, Scheduler }
 import chisel3._
 import chisel3.util._
 
 class Scoreboard(implicit p: Parameters) extends Scheduler {
-  override def desiredName: String = s"${p(ISA).name}_scoreboard"
+  override def desiredName: String = s"${p(ISA).name}_superscalar_scoreboard"
 
   private val NUM_REGS = p(NumArchRegs)
   private val NO_PROD  = numFUs.U(log2Ceil(numFUs + 1).W)
@@ -13,20 +14,36 @@ class Scoreboard(implicit p: Parameters) extends Scheduler {
   val reg_prod = RegInit(VecInit(Seq.fill(NUM_REGS)(NO_PROD)))
   val fu_busy  = RegInit(VecInit(Seq.fill(numFUs)(false.B)))
 
-  // Completion Routing
-  for (i <- 0 until numFUs) {
-    val done = fu_done(i)
-    when(done.valid) {
-      fu_busy(i) := false.B
-      when(done.bits.rd =/= 0.U && reg_prod(done.bits.rd) === i.U) {
-        reg_prod(done.bits.rd) := NO_PROD
+  val lane_can_issue = Wire(Vec(issueWidth, Bool()))
+
+  when(flush) {
+    fu_busy.foreach(_ := false.B)
+    reg_prod.foreach(_ := NO_PROD)
+  }.otherwise {
+    // Completion Routing
+    for (i <- 0 until numFUs) {
+      val done = fu_done(i)
+      when(done.valid) {
+        fu_busy(i) := false.B
+        when(done.bits.rd =/= 0.U && reg_prod(done.bits.rd) === i.U) {
+          reg_prod(done.bits.rd) := NO_PROD
+        }
+      }
+    }
+
+    // Issue Logic State Updates
+    for (w <- 0 until issueWidth) {
+      val req = dis_reqs(w).bits
+      when(lane_can_issue(w)) {
+        fu_busy(req.fu_id) := true.B
+        when(req.rd =/= 0.U) {
+          reg_prod(req.rd) := req.fu_id
+        }
       }
     }
   }
 
-  // Issue Logic
-  val lane_can_issue = Wire(Vec(issueWidth, Bool()))
-
+  // Issue Evaluation
   for (w <- 0 until issueWidth) {
     val req        = dis_reqs(w).bits
     val valid      = dis_reqs(w).valid
@@ -43,14 +60,7 @@ class Scoreboard(implicit p: Parameters) extends Scheduler {
     val is_ready = !has_hazard && fu_ready
 
     dis_reqs(w).ready := is_ready
-    lane_can_issue(w) := valid && is_ready
-
-    when(lane_can_issue(w)) {
-      fu_busy(req.fu_id) := true.B
-      when(!is_zero_rd) {
-        reg_prod(req.rd) := req.fu_id
-      }
-    }
+    lane_can_issue(w) := valid && is_ready && !flush
   }
 
   // Routing requests to FUs

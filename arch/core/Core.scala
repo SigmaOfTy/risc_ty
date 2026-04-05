@@ -6,8 +6,8 @@ import imm._
 import bru._
 import regfile._
 import bpu._
-import arch.core.pipeline._
-import arch.core.csr.CoreInterruptIO
+import pipeline._
+import csr._
 import arch.configs._
 import arch.core.ooo._
 import vopts.mem.cache.{ CacheIO, CacheReadOnlyIO, SetAssociativeCache, SetAssociativeCacheReadOnly }
@@ -22,7 +22,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   val mmio = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
   val irq  = IO(new CoreInterruptIO)
 
-  // Submodules
   val bpu       = Module(new Bpu)
   val ifu       = Module(new Ifu)
   val decoder   = Module(new Decoder)
@@ -34,7 +33,7 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   val regfile_utils = RegfileUtilitiesFactory.getOrThrow(p(ISA).name)
 
-  val scheduler = Scheduler()
+  val scheduler = SchedulerFactory()
   val numFUs    = p(FunctionalUnits).size
 
   val alu_fu  = Module(new AluFU)
@@ -56,7 +55,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   for (i <- 0 until numFUs)
     fuMap(i).req <> scheduler.fu_reqs(i)
 
-  // Fetch & Decode (Frontend)
   imem <> l1_icache.lower
   ifu.mem <> l1_icache.upper
 
@@ -116,7 +114,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   bpu.update.target := bru.target
   bpu.update.taken  := bru.taken
 
-  // Dispatch to Scheduler
   val fuNames = p(FunctionalUnits).map(_.name)
   val aluId   = fuNames.indexOf("ALU_0").U
   val multId  = fuNames.indexOf("MULT_0").U
@@ -135,9 +132,7 @@ class RiscCore(implicit p: Parameters) extends Module {
   val is_bubble = if_id("instr") === p(Bubble).value.U(p(ILen).W)
 
   val dis0 = scheduler.dis_reqs(0)
-
-  dis0.valid := !is_bubble && !take_trap
-
+  dis0.valid         := !is_bubble && !take_trap
   dis0.bits.pc       := if_id("pc")
   dis0.bits.instr    := if_id("instr")
   dis0.bits.fu_id    := target_fu_id
@@ -154,7 +149,8 @@ class RiscCore(implicit p: Parameters) extends Module {
     scheduler.dis_reqs(w).bits  := 0.U.asTypeOf(new MicroOp)
   }
 
-  // Common Writeback Arbiter
+  scheduler.flush := take_trap
+
   val wb_arbiter = Module(new RRArbiter(new FunctionalUnitResp, numFUs))
   for (i <- 0 until numFUs) {
     wb_arbiter.io.in(i) <> fuMap(i).resp
@@ -172,7 +168,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   regfile.write_preg := wb_resp.rd
   regfile.write_data := wb_resp.result
 
-  // System Registers / Cycle Counters
   val cycle_count   = RegInit(0.U(64.W))
   val instret_count = RegInit(0.U(64.W))
   cycle_count   := cycle_count + 1.U
@@ -182,7 +177,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   csr_fu.instret := instret_count
   csr_fu.irq     := irq
 
-  // 6. Debug IOs
   val debug_cycle_count   = IO(Output(UInt(64.W)))
   val debug_instret_count = IO(Output(UInt(64.W)))
   val debug_instret       = IO(Output(Bool()))
