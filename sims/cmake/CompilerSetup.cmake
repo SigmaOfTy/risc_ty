@@ -9,14 +9,53 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
-  add_compile_options(-O3 -march=native -mtune=native -fomit-frame-pointer)
+  add_compile_options(
+    -O3
+    -march=native
+    -mtune=native
+    -fomit-frame-pointer
+    -funroll-loops
+    -finline-functions
+    -ffast-math
+    -fno-math-errno
+    -fno-trapping-math
+    -freciprocal-math
+    -fno-signed-zeros
+    -ffinite-math-only
+    -fassociative-math
+  )
   set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
-  add_compile_options(-O2 -march=native -g -fno-omit-frame-pointer)
-else()
-  add_compile_options(-O0 -g)
-endif()
 
+  find_program(MOLD_LINKER mold)
+  find_program(LLD_LINKER lld)
+    
+  if(MOLD_LINKER)
+    message(STATUS "Using mold linker")
+    add_link_options(-fuse-ld=mold)
+  elseif(LLD_LINKER)
+    message(STATUS "Using lld linker")
+    add_link_options(-fuse-ld=lld)
+  endif()
+
+elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+  add_compile_options(
+    -O2
+    -march=native
+    -g
+    -fno-omit-frame-pointer
+    -funroll-loops
+    -finline-functions
+  )
+  set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+  add_compile_options(
+    -O0
+    -g
+    -fno-omit-frame-pointer
+    -Wall
+    -Wextra
+  )
+endif()
 
 if(USE_CCACHE)
   find_program(CCACHE_PROGRAM ccache)
