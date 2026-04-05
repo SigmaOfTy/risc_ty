@@ -4,9 +4,9 @@ import arch.configs._
 import chisel3._
 
 class Alu(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_alu"
+  override def desiredName: String = s"${p(ISA).name}_alu"
 
-  val utils = AluUtilitiesFactory.getOrThrow(p(ISA))
+  val utils = AluUtilitiesFactory.getOrThrow(p(ISA).name)
 
   val en     = IO(Input(Bool()))
   val src1   = IO(Input(UInt(p(XLen).W)))

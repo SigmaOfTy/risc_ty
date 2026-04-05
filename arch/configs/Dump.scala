@@ -1,7 +1,6 @@
 package arch.configs
 
 import proto._
-import arch.isa._
 import vopts.mem.cache._
 import scalapb.json4s.JsonFormat
 import java.nio.file.{ Files, Paths }
@@ -32,6 +31,9 @@ object RiscDump {
           useBypass = p(IsRegfileUseBypass),
         )
       ),
+      scheduler = Some(
+        SchedulerConfig(policy = toProtoSchduler(p(ScheduleType)), fus = p(FunctionalUnits))
+      ),
       rob = Some(
         RobConfig(
           size = p(ROBSize),
@@ -51,11 +53,6 @@ object RiscDump {
           ways = p(L1DCacheWays),
           lineSize = p(L1DCacheLineSize),
           replPolicy = toProtoRepl(p(L1DCacheReplPolicy)),
-        )
-      ),
-      csr = Some(
-        CsrConfig(
-          enable = p(EnableCSR),
         )
       ),
       bus = Some(
@@ -86,7 +83,7 @@ object RiscDump {
   }
 
   def dumpIsa(p: Parameters, jsonPath: String, binPath: Option[String] = None): Unit = {
-    val isa = IsaFactory.isa(p(ISA))
+    val isa = p(ISA).isa
     writeJson(isa, jsonPath)
     binPath.foreach(bp => writeBin(isa.toByteArray, bp))
     println(s"[RiscDump] isa → $jsonPath")
@@ -116,5 +113,10 @@ object RiscDump {
     case "axil" => BusType.BUS_TYPE_AXIL
     case "axif" => BusType.BUS_TYPE_AXIF
     case _      => BusType.BUS_TYPE_UNKNOWN
+  }
+
+  private def toProtoSchduler(s: String): SchedulePolicy = s match {
+    case "scoreboard" => SchedulePolicy.SCHEDULE_POLICY_SCOREBOARD
+    case _            => SchedulePolicy.SCHEDULE_POLICY_UNSPECIFIED
   }
 }

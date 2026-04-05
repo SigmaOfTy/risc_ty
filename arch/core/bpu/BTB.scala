@@ -31,7 +31,7 @@ class BpuUpdate(implicit p: Parameters) extends Bundle {
 }
 
 class Btb(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_btb"
+  override def desiredName: String = s"${p(ISA).name}_btb"
 
   private val iAlignWidth = log2Ceil(p(IAlign))
   private val indexWidth  = log2Ceil(p(BTBSets))

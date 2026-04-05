@@ -4,9 +4,9 @@ import arch.configs._
 import chisel3._
 
 class ImmGen(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_immgen"
+  override def desiredName: String = s"${p(ISA).name}_immgen"
 
-  val utils = ImmUtilitiesFactory.getOrThrow(p(ISA))
+  val utils = ImmUtilitiesFactory.getOrThrow(p(ISA).name)
 
   val instr   = IO(Input(UInt(p(ILen).W)))
   val immType = IO(Input(UInt(utils.immTypeWidth.W)))

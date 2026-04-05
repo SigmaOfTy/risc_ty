@@ -5,7 +5,7 @@ import chisel3._
 import chisel3.util._
 
 class Scoreboard(implicit p: Parameters) extends Module {
-  override def desiredName: String = "scoreboard"
+  override def desiredName: String = s"${p(ISA).name}_scoreboard"
 
   val io = IO(new ScoreboardIO)
 

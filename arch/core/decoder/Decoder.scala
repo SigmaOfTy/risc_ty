@@ -4,9 +4,9 @@ import arch.configs._
 import chisel3._
 
 class Decoder(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_decoder"
+  override def desiredName: String = s"${p(ISA).name}_decoder"
 
-  val utils = DecoderUtilitiesFactory.getOrThrow(p(ISA))
+  val utils = DecoderUtilitiesFactory.getOrThrow(p(ISA).name)
 
   val instr   = IO(Input(UInt(p(ILen).W)))
   val decoded = IO(Output(new DecodedOutput))

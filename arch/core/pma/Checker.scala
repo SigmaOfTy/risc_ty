@@ -5,7 +5,7 @@ import arch.configs._
 import chisel3._
 
 class PmaChecker(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_pma_checker"
+  override def desiredName: String = s"${p(ISA).name}_pma_checker"
 
   val addr      = IO(Input(UInt(p(XLen).W)))
   val valid     = IO(Output(Bool()))

@@ -5,7 +5,7 @@ import vopts.mem.cache.CacheReadOnlyIO
 import chisel3._
 
 class Ifu(implicit p: Parameters) extends Module {
-  override def desiredName: String = s"${p(ISA)}_ifu"
+  override def desiredName: String = s"${p(ISA).name}_ifu"
 
   val mem = IO(new CacheReadOnlyIO(UInt(p(XLen).W), p(XLen)))
 

@@ -3,6 +3,7 @@ package arch
 package object configs {
   import proto._
   import proto.DeviceType._
+  import proto.FunctionalUnitType._
   import isa._
   import vopts.mem.cache._
   import chisel3.util.BitPat
@@ -11,7 +12,7 @@ package object configs {
 
   // --------------------------------------------
   // Architecture Parameters
-  object ISA extends Field[String]("rv32im")
+  object ISA extends Field[IsaWrapper](RV32IM)
 
   // Ifu Parameters
   object IBufferSize extends Field[Int](8)
@@ -20,8 +21,24 @@ package object configs {
   object IsRegfileUseBypass extends Field[Boolean](true)
   object NumPhyRegs         extends Field[Int](64)
 
+  // Scheduler Parameters
+  object ScheduleType extends Field[String]("scoreboard")
+  object IssueWidth   extends Field[Int](2)
+  object FunctionalUnits
+      extends Field[Seq[FunctionalUnitDescriptor]](
+        Seq(
+          FunctionalUnitDescriptor(name = "ALU_0", `type` = FUNCTIONAL_UNIT_TYPE_ALU),
+          FunctionalUnitDescriptor(name = "MULT_0", `type` = FUNCTIONAL_UNIT_TYPE_MULT),
+          FunctionalUnitDescriptor(name = "LSU_0", `type` = FUNCTIONAL_UNIT_TYPE_LSU),
+          FunctionalUnitDescriptor(name = "CSR", `type` = FUNCTIONAL_UNIT_TYPE_CSR),
+        )
+      )
+
   // Mult Parameters
   object MultPipelineStages extends Field[Int](2)
+
+  // Csr Parameters
+  object EnableCSR extends Field[Boolean](true)
 
   // ROB Parameters
   object ROBSize extends Field[Int](16)
@@ -42,9 +59,6 @@ package object configs {
   object L1DCacheLineSize   extends Field[Int](16) // in bytes
   object L1DCacheReplPolicy extends Field[ReplacementPolicy](PseudoLRU)
 
-  // Csr Parameters
-  object EnableCSR extends Field[Boolean](true)
-
   // Bus Parameters
   object BusType                       extends Field[String]("axif")
   object BusCrossbarFifoDepthPerClient extends Field[Int](4)
@@ -62,12 +76,12 @@ package object configs {
 
   // NOTE: You should not modify the parameters below, as they are derived from the user options above
   // Derived Parameters
-  object XLen        extends Field[Int](IsaFactory.xlen(ISA()))
-  object ILen        extends Field[Int](IsaFactory.ilen(ISA()))
-  object IAlign      extends Field[Int](IsaFactory.iAlign(ISA()))
-  object NumArchRegs extends Field[Int](IsaFactory.numArchRegs(ISA()))
-  object IsBigEndian extends Field[Boolean](IsaFactory.isBigEndian(ISA()))
-  object Bubble      extends Field[BitPat](IsaFactory.bubble(ISA()))
+  object XLen        extends Field[Int](ISA().xlen)
+  object ILen        extends Field[Int](ISA().ilen)
+  object IAlign      extends Field[Int](ISA().iAlign)
+  object NumArchRegs extends Field[Int](ISA().numArchRegs)
+  object IsBigEndian extends Field[Boolean](ISA().isBigEndian)
+  object Bubble      extends Field[BitPat](ISA().bubble)
 
   implicit val p: Parameters = Parameters.empty ++ Map(
     // ISA
@@ -86,8 +100,16 @@ package object configs {
     IsRegfileUseBypass -> IsRegfileUseBypass(),
     NumPhyRegs         -> NumPhyRegs(),
 
+    // Scheduler
+    ScheduleType    -> ScheduleType(),
+    IssueWidth      -> IssueWidth(),
+    FunctionalUnits -> FunctionalUnits(),
+
     // Mult
     MultPipelineStages -> MultPipelineStages(),
+
+    // CSR
+    EnableCSR -> EnableCSR(),
 
     // ROB
     ROBSize -> ROBSize(),
@@ -101,9 +123,6 @@ package object configs {
     L1DCacheSets       -> L1DCacheSets(),
     L1DCacheLineSize   -> L1DCacheLineSize(),
     L1DCacheReplPolicy -> L1DCacheReplPolicy(),
-
-    // CSR
-    EnableCSR -> EnableCSR(),
 
     // Bus
     BusType                       -> BusType(),

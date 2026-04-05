@@ -11,12 +11,12 @@ import chisel3._
 import chisel3.util.BitPat
 
 class DecodedOutput(implicit p: Parameters) extends Bundle {
-  val bru_utils     = BruUtilitiesFactory.getOrThrow(p(ISA))
-  val imm_utils     = ImmUtilitiesFactory.getOrThrow(p(ISA))
-  val alu_utils     = AluUtilitiesFactory.getOrThrow(p(ISA))
-  val lsu_utils     = LsuUtilitiesFactory.getOrThrow(p(ISA))
-  val regfile_utils = RegfileUtilitiesFactory.getOrThrow(p(ISA))
-  val csr_utils     = CsrUtilitiesFactory.getOrThrow(p(ISA))
+  val bru_utils     = BruUtilitiesFactory.getOrThrow(p(ISA).name)
+  val imm_utils     = ImmUtilitiesFactory.getOrThrow(p(ISA).name)
+  val alu_utils     = AluUtilitiesFactory.getOrThrow(p(ISA).name)
+  val lsu_utils     = LsuUtilitiesFactory.getOrThrow(p(ISA).name)
+  val regfile_utils = RegfileUtilitiesFactory.getOrThrow(p(ISA).name)
+  val csr_utils     = CsrUtilitiesFactory.getOrThrow(p(ISA).name)
 
   val legal = Bool()
 
