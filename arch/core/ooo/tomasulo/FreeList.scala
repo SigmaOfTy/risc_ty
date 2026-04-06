@@ -2,39 +2,45 @@ package arch.core.ooo
 
 import arch.configs._
 import chisel3._
-import chisel3.util.{ log2Ceil, PriorityEncoder }
+import chisel3.util._
 
 class FreeList(implicit p: Parameters) extends Module {
-  // Allocate physical register
-  val alloc_en    = IO(Input(Bool()))
-  val alloc_preg  = IO(Output(UInt(log2Ceil(p(NumPhyRegs)).W)))
-  val alloc_valid = IO(Output(Bool()))
+  override def desiredName: String = s"${p(ISA).name}_free_list"
 
-  // Free physical register
-  val free_en   = IO(Input(Bool()))
-  val free_preg = IO(Input(UInt(log2Ceil(p(NumPhyRegs)).W)))
+  val io = IO(new Bundle {
+    // Speculative Allocation
+    val alloc_en    = Input(Bool())
+    val alloc_preg  = Output(UInt(log2Ceil(p(NumPhyRegs)).W))
+    val alloc_valid = Output(Bool())
 
-  val empty = IO(Output(Bool()))
+    // Architectural Free
+    val commit_free_en   = Input(Bool())
+    val commit_free_preg = Input(UInt(log2Ceil(p(NumPhyRegs)).W))
 
-  val free_vec = RegInit(VecInit(Seq.tabulate(p(NumPhyRegs)) { i =>
-    (i >= p(NumArchRegs)).B
-  }))
+    // Rollbacks
+    val flush = Input(Bool())
+    val empty = Output(Bool())
+  })
 
-  // Find first free physical register
-  val first_free_preg = PriorityEncoder(free_vec)
-  val has_free        = free_vec.asUInt.orR
+  val arch_free_vec = RegInit(VecInit(Seq.tabulate(p(NumPhyRegs))(i => (i >= p(NumArchRegs)).B)))
+  val spec_free_vec = RegInit(VecInit(Seq.tabulate(p(NumPhyRegs))(i => (i >= p(NumArchRegs)).B)))
 
-  alloc_preg  := first_free_preg
-  alloc_valid := has_free
-  empty       := !has_free
+  val first_free_preg = PriorityEncoder(spec_free_vec)
+  val has_free        = spec_free_vec.asUInt.orR
 
-  // Allocate
-  when(alloc_en && has_free) {
-    free_vec(first_free_preg) := false.B
-  }
+  io.alloc_preg  := first_free_preg
+  io.alloc_valid := has_free
+  io.empty       := !has_free
 
-  // Free
-  when(free_en) {
-    free_vec(free_preg) := true.B
+  when(io.flush) {
+    spec_free_vec := arch_free_vec
+  }.otherwise {
+    when(io.alloc_en && has_free) {
+      spec_free_vec(first_free_preg) := false.B
+    }
+    when(io.commit_free_en) {
+      arch_free_vec(io.commit_free_preg) := true.B
+      spec_free_vec(io.commit_free_preg) := true.B
+    }
   }
 }

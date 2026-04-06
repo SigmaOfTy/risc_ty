@@ -2,29 +2,47 @@ package arch.core.ooo
 
 import arch.configs._
 import chisel3._
-import chisel3.util.log2Ceil
+import chisel3.util._
 
 class RenameMapTable(implicit p: Parameters) extends Module {
-  // RS1, RS2
-  val read_rs1 = IO(Input(UInt(log2Ceil(p(NumArchRegs)).W)))
-  val read_rs2 = IO(Input(UInt(log2Ceil(p(NumArchRegs)).W)))
-  val rs1_preg = IO(Output(UInt(log2Ceil(p(NumPhyRegs)).W)))
-  val rs2_preg = IO(Output(UInt(log2Ceil(p(NumPhyRegs)).W)))
+  override def desiredName: String = s"${p(ISA).name}_rename_map_table"
+  val io                           = IO(new Bundle {
+    // Read mappings for Dispatch
+    val read_rs1 = Input(UInt(log2Ceil(p(NumArchRegs)).W))
+    val read_rs2 = Input(UInt(log2Ceil(p(NumArchRegs)).W))
+    val rs1_preg = Output(UInt(log2Ceil(p(NumPhyRegs)).W))
+    val rs2_preg = Output(UInt(log2Ceil(p(NumPhyRegs)).W))
 
-  // RD allocation
-  val alloc_en     = IO(Input(Bool()))
-  val arch_reg     = IO(Input(UInt(log2Ceil(p(NumArchRegs)).W)))
-  val phys_reg     = IO(Input(UInt(log2Ceil(p(NumPhyRegs)).W)))
-  val old_phys_reg = IO(Output(UInt(log2Ceil(p(NumPhyRegs)).W)))
+    // Speculative Rename
+    val alloc_en     = Input(Bool())
+    val arch_reg     = Input(UInt(log2Ceil(p(NumArchRegs)).W))
+    val phys_reg     = Input(UInt(log2Ceil(p(NumPhyRegs)).W))
+    val old_phys_reg = Output(UInt(log2Ceil(p(NumPhyRegs)).W))
 
-  val map_table = RegInit(VecInit(Seq.fill(p(NumArchRegs))(0.U(log2Ceil(p(NumPhyRegs)).W))))
+    // Commit Rename
+    val commit_en   = Input(Bool())
+    val commit_arch = Input(UInt(log2Ceil(p(NumArchRegs)).W))
+    val commit_phys = Input(UInt(log2Ceil(p(NumPhyRegs)).W))
 
-  rs1_preg := map_table(read_rs1)
-  rs2_preg := map_table(read_rs2)
+    // Rollback
+    val flush = Input(Bool())
+  })
 
-  old_phys_reg := map_table(arch_reg)
+  val spec_table = RegInit(VecInit(Seq.tabulate(p(NumArchRegs))(i => i.U(log2Ceil(p(NumPhyRegs)).W))))
+  val arch_table = RegInit(VecInit(Seq.tabulate(p(NumArchRegs))(i => i.U(log2Ceil(p(NumPhyRegs)).W))))
 
-  when(alloc_en && arch_reg =/= 0.U) {
-    map_table(arch_reg) := phys_reg
+  io.rs1_preg     := spec_table(io.read_rs1)
+  io.rs2_preg     := spec_table(io.read_rs2)
+  io.old_phys_reg := spec_table(io.arch_reg)
+
+  when(io.flush) {
+    spec_table := arch_table
+  }.otherwise {
+    when(io.alloc_en && io.arch_reg =/= 0.U) {
+      spec_table(io.arch_reg) := io.phys_reg
+    }
+    when(io.commit_en && io.commit_arch =/= 0.U) {
+      arch_table(io.commit_arch) := io.commit_phys
+    }
   }
 }

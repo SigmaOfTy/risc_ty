@@ -24,6 +24,27 @@ enum SystemInstr {
   MRET = 0x30200073,
 };
 
+enum CsrAddrMap {
+  // U-Mode
+  CYCLE = 0xC00,
+  INSTRET = 0xC02,
+
+  // M-Mode
+  MSTATUS = 0x300,
+  MISA = 0x301,
+  MIE = 0x304,
+  MTVEC = 0x305,
+  MSCRATCH = 0x340,
+  MEPC = 0x341,
+  MCAUSE = 0x342,
+  MIP = 0x344,
+  MCYCLE = 0xB00,
+  MVENDERID = 0xF11,
+  MARCHID = 0xF12,
+  MIMPID = 0xF13,
+  MHARTID = 0xF14,
+};
+
 class Instruction {
 public:
   explicit Instruction(instr_t raw);
@@ -31,6 +52,7 @@ public:
   [[nodiscard]] auto type() const noexcept -> InstrType;
   [[nodiscard]] auto mnemonic() const noexcept -> std::string;
   [[nodiscard]] auto to_string() const -> std::string;
+  [[nodiscard]] auto csr_name() const -> std::string;
 
   [[nodiscard]] auto opcode() const noexcept -> uint8_t { return opcode_; }
   [[nodiscard]] auto rd() const noexcept -> uint8_t { return rd_; }

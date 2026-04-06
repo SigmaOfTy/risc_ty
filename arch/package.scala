@@ -23,7 +23,7 @@ package object configs {
 
   // Scheduler Parameters
   object ScheduleType extends Field[String]("in-order")
-  object IssueWidth   extends Field[Int](2) // NOTE: Only IssueWidth = 1 is supported by now
+  object IssueWidth   extends Field[Int](1) // NOTE: Only IssueWidth = 1 is supported by now
   object FunctionalUnits
       extends Field[Seq[FunctionalUnitDescriptor]](
         Seq(

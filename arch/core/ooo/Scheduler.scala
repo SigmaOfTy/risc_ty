@@ -17,6 +17,7 @@ object Scheduler {
     p(ScheduleType) match {
       case "in-order"   => Module(new Inorder)
       case "scoreboard" => Module(new Scoreboard)
+      // case "tomasulo"   => Module(new Tomasulo)
       case other        => throw new IllegalArgumentException(s"Unknown ScheduleType: $other")
     }
 }

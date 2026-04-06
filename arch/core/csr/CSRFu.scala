@@ -12,54 +12,65 @@ class CsrFU(implicit p: Parameters) extends FunctionalUnit {
   val trap_request = IO(Output(Bool()))
   val trap_target  = IO(Output(UInt(p(XLen).W)))
   val trap_ret_tgt = IO(Output(UInt(p(XLen).W)))
-  val irq          = IO(Input(new CoreInterruptIO))
+  val trap_ret     = IO(Output(Bool()))
+  val is_busy      = IO(Output(Bool()))
   val cycle        = IO(Input(UInt(64.W)))
   val instret      = IO(Input(UInt(64.W)))
+  val irq          = IO(new CoreInterruptIO)
+  val arch_pc      = IO(Input(UInt(p(XLen).W)))
 
-  val core_csr  = Module(new CsrFile)
-  val decoder   = Module(new Decoder)
-  val imm_utils = ImmUtilitiesFactory.getOrThrow(p(ISA).name)
-  val csr_utils = CsrUtilitiesFactory.getOrThrow(p(ISA).name)
+  val csrfile: CsrFile = Module(new CsrFile)
+  val decoder          = Module(new Decoder)
+  val imm_gen          = Module(new ImmGen)
 
+  val busy    = RegInit(false.B)
   val req_reg = Reg(new MicroOp)
-  val valid   = RegInit(false.B)
 
-  io.req.ready := !valid || io.resp.fire
+  io.req.ready := !busy || io.resp.ready
+  is_busy      := busy
 
-  when(io.req.fire) {
-    valid   := true.B
+  when(io.flush) {
+    busy := false.B
+  }.elsewhen(io.req.fire) {
+    busy    := true.B
     req_reg := io.req.bits
-  }.elsewhen(io.resp.fire || io.flush) {
-    valid := false.B
+  }.elsewhen(io.resp.fire) {
+    busy := false.B
   }
 
-  decoder.instr := req_reg.instr
+  decoder.instr   := req_reg.instr
+  imm_gen.instr   := req_reg.instr
+  imm_gen.immType := decoder.decoded.imm_type
 
-  val csr_imm  = imm_utils.genCsrImm(req_reg.instr)
-  val csr_addr = csr_utils.getAddr(req_reg.instr)
-
-  core_csr.en       := valid && !core_csr.trap_request
-  core_csr.cmd      := decoder.decoded.csr_cmd
-  core_csr.addr     := csr_addr
-  core_csr.imm      := csr_imm
-  core_csr.src      := req_reg.rs1_data
-  core_csr.pc       := req_reg.pc
-  core_csr.trap_ret := decoder.decoded.ret
-
-  if (core_csr.extraInputIO.contains("cycle")) core_csr.extraInputIO("cycle")         := cycle
-  if (core_csr.extraInputIO.contains("instret")) core_csr.extraInputIO("instret")     := instret
-  if (core_csr.extraInputIO.contains("timer_irq")) core_csr.extraInputIO("timer_irq") := irq.timer_irq
-  if (core_csr.extraInputIO.contains("soft_irq")) core_csr.extraInputIO("soft_irq")   := irq.soft_irq
-  if (core_csr.extraInputIO.contains("ext_irq")) core_csr.extraInputIO("ext_irq")     := irq.ext_irq
-
-  trap_request := core_csr.trap_request
-  trap_target  := core_csr.trap_target
-  trap_ret_tgt := core_csr.trap_ret_target
-
-  io.resp.valid        := valid
-  io.resp.bits.result  := core_csr.rd
-  io.resp.bits.rd      := req_reg.rd
+  io.resp.valid        := busy && !io.flush
   io.resp.bits.pc      := req_reg.pc
   io.resp.bits.instr   := req_reg.instr
+  io.resp.bits.rd      := req_reg.rd
   io.resp.bits.rob_tag := req_reg.rob_tag
+
+  val active_instr = Mux(busy, req_reg.instr, 0.U)
+
+  csrfile match {
+    case csr =>
+      csr.en       := true.B
+      csr.trap_ret := Mux(busy, decoder.decoded.ret, false.B)
+      csr.cmd      := Mux(busy, decoder.decoded.csr_cmd, 0.U)
+      csr.addr     := arch.core.csr.CsrUtilitiesFactory.getOrThrow(p(ISA).name).getAddr(active_instr)
+      csr.src      := req_reg.rs1_data
+      csr.imm      := imm_gen.csr_imm
+
+      csr.pc := Mux(busy, req_reg.pc, arch_pc)
+
+      csr.extraInputIO("cycle")     := cycle
+      csr.extraInputIO("instret")   := instret
+      csr.extraInputIO("timer_irq") := irq.timer_irq
+      csr.extraInputIO("soft_irq")  := irq.soft_irq
+      csr.extraInputIO("ext_irq")   := irq.ext_irq
+
+      io.resp.bits.result := csr.rd
+      trap_request        := csr.trap_request
+      trap_target         := csr.trap_target
+      trap_ret_tgt        := csr.trap_ret_target
+      trap_ret            := Mux(busy, decoder.decoded.ret, false.B)
+  }
 }

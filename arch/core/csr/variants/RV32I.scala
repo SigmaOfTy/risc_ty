@@ -25,18 +25,9 @@ trait RV32ICsrMap {
 
   // U-mode
   def CSR_CYCLE   = BitPat("b1100_0000_0000")
-  def CSR_TIME    = BitPat("b1100_0000_0001")
   def CSR_INSTRET = BitPat("b1100_0000_0010")
 
   // S-mode
-  def CSR_SSTATUS  = BitPat("b0001_0000_0000")
-  def CSR_SIE      = BitPat("b0001_0000_0100")
-  def CSR_STVEC    = BitPat("b0001_0000_0101")
-  def CSR_SSCRATCH = BitPat("b0001_0100_0000")
-  def CSR_SEPC     = BitPat("b0001_0100_0001")
-  def CSR_SCAUSE   = BitPat("b0001_0100_0010")
-  def CSR_SIP      = BitPat("b0001_0100_0100")
-  def CSR_SATP     = BitPat("b0001_1000_0000")
 
   // H-mode
 
@@ -94,18 +85,7 @@ object RV32ICsrUtilities extends RegisteredUtilities[CsrUtilities] with RV32ICsr
     override def table: Seq[(Register, CsrUpdateBehavior)] = Seq(
       // U-mode
       (Register("cycle", CSR_CYCLE.value, 0x0L, writable = false), AlwaysUpdate(params => params("cycle")(31, 0))),
-      (Register("time", CSR_TIME.value, 0x0L, writable = false), NormalUpdate),
       (Register("instret", CSR_INSTRET.value, 0x0L, writable = false), AlwaysUpdate(params => params("instret")(31, 0))),
-
-      // S-mode
-      (Register("sstatus", CSR_SSTATUS.value, 0x0L), NormalUpdate),
-      (Register("sie", CSR_SIE.value, 0x0L), NormalUpdate),
-      (Register("stvec", CSR_STVEC.value, 0x0L), NormalUpdate),
-      (Register("sscratch", CSR_SSCRATCH.value, 0x0L), NormalUpdate),
-      (Register("sepc", CSR_SEPC.value, 0x0L), NormalUpdate),
-      (Register("scause", CSR_SCAUSE.value, 0x0L), NormalUpdate),
-      (Register("sip", CSR_SIP.value, 0x0L), NormalUpdate),
-      (Register("satp", CSR_SATP.value, 0x0L), NormalUpdate),
 
       // M-mode
       (Register("mstatus", CSR_MSTATUS.value, 0x0L), NormalUpdate),
