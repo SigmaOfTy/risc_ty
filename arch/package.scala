@@ -22,7 +22,7 @@ package object configs {
   object NumPhyRegs         extends Field[Int](64)
 
   // Scheduler Parameters
-  object ScheduleType extends Field[String]("in-order")
+  object ScheduleType extends Field[String]("scoreboard")
   object IssueWidth   extends Field[Int](1) // NOTE: Only IssueWidth = 1 is supported by now
   object FunctionalUnits
       extends Field[Seq[FunctionalUnitDescriptor]](
