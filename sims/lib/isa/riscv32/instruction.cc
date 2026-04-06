@@ -277,6 +277,47 @@ std::string Instruction::mnemonic() const noexcept {
   return "unknown";
 }
 
+auto Instruction::csr_name() const -> std::string {
+  uint32_t addr = (raw_ >> 20) & 0xFFF;
+  switch (addr) {
+  case CYCLE:
+    return "cycle";
+  case INSTRET:
+    return "instret";
+  case MSTATUS:
+    return "mstatus";
+  case MISA:
+    return "misa";
+  case MIE:
+    return "mie";
+  case MTVEC:
+    return "mtvec";
+  case MSCRATCH:
+    return "mscratch";
+  case MEPC:
+    return "mepc";
+  case MCAUSE:
+    return "mcause";
+  case MIP:
+    return "mip";
+  case MCYCLE:
+    return "mcycle";
+  case MVENDERID:
+    return "mvendorid";
+  case MARCHID:
+    return "marchid";
+  case MIMPID:
+    return "mimpid";
+  case MHARTID:
+    return "mhartid";
+  default: {
+    std::ostringstream oss;
+    oss << "0x" << std::hex << std::setw(3) << std::setfill('0') << addr;
+    return oss.str();
+  }
+  }
+}
+
 auto Instruction::to_string() const -> std::string {
   std::ostringstream oss;
   std::string mnemonic_str = mnemonic();
@@ -324,13 +365,11 @@ auto Instruction::to_string() const -> std::string {
         raw_ == MRET) {
       oss << "";
     } else if (funct3_ <= 0b011) {
-      oss << "x" << static_cast<int>(rd_) << ", x" << static_cast<int>(rs1_)
-          << ", 0x" << std::hex << std::setw(3) << std::setfill('0')
-          << ((raw_ >> 20) & 0xFFF);
-    } else {
-      oss << "x" << static_cast<int>(rd_) << ", 0x" << std::hex << std::setw(3)
-          << std::setfill('0') << ((raw_ >> 20) & 0xFFF) << ", "
+      oss << "x" << static_cast<int>(rd_) << ", " << csr_name() << ", x"
           << static_cast<int>(rs1_);
+    } else {
+      oss << "x" << static_cast<int>(rd_) << ", " << csr_name() << ", "
+          << std::dec << static_cast<int>(rs1_);
     }
     break;
 
