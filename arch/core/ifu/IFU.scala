@@ -51,8 +51,8 @@ class Ifu(implicit p: Parameters) extends Module {
 
   val meta_q = Module(new Queue(new FetchMeta, 8, hasFlush = true))
 
-  val drop_count   = RegInit(0.U(4.W))
-  val pending_reqs = RegInit(0.U(4.W))
+  val drop_count   = RegInit(0.U(5.W))
+  val pending_reqs = RegInit(0.U(5.W))
 
   val req_fire  = mem.req.valid && mem.req.ready
   val resp_fire = mem.resp.valid && mem.resp.ready
@@ -64,13 +64,16 @@ class Ifu(implicit p: Parameters) extends Module {
     drop_count   := next_drop_count - Mux(is_dropping, 1.U, 0.U)
     pending_reqs := 0.U
   }.otherwise {
-    when(req_fire && !resp_fire) {
+    val is_valid_resp_fire = resp_fire && (drop_count === 0.U)
+    val is_drop_resp_fire  = resp_fire && (drop_count > 0.U)
+
+    when(req_fire && !is_valid_resp_fire) {
       pending_reqs := pending_reqs + 1.U
-    }.elsewhen(!req_fire && resp_fire) {
+    }.elsewhen(!req_fire && is_valid_resp_fire) {
       pending_reqs := pending_reqs - 1.U
     }
 
-    when(resp_fire && drop_count > 0.U) {
+    when(is_drop_resp_fire) {
       drop_count := drop_count - 1.U
     }
   }
