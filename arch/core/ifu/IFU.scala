@@ -2,12 +2,13 @@ package arch.core.ifu
 
 import arch.configs._
 import chisel3._
+import chisel3.util._
 import vopts.mem.cache.CacheReadOnlyIO
 
 class Ifu(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_ifu"
 
-  val mem = IO(new CacheReadOnlyIO(UInt(p(XLen).W), p(XLen)))
+  val mem = IO(new CacheReadOnlyIO(Vec(p(IssueWidth), UInt(p(ILen).W)), p(XLen)))
 
   val bru_taken  = IO(Input(Bool()))
   val bru_target = IO(Input(UInt(p(XLen).W)))
@@ -40,79 +41,58 @@ class Ifu(implicit p: Parameters) extends Module {
 
   val pc = RegInit(p(ResetVector).U(p(XLen).W))
 
-  val reset_ibuffer_reg = RegInit(false.B)
-  val imem_pending      = RegInit(false.B)
-  val imem_data         = RegInit(p(Bubble).value.U(p(ILen).W))
+  val do_redirect = take_trap || bru_taken || bru_not_taken
 
-  val imem_pc    = RegInit(p(ResetVector).U(p(XLen).W))
-  val imem_valid = RegInit(false.B)
+  class FetchMeta extends Bundle {
+    val pc              = UInt(p(XLen).W)
+    val bpu_pred_taken  = Bool()
+    val bpu_pred_target = UInt(p(XLen).W)
+  }
 
-  val bpu_pred_taken  = RegInit(false.B)
-  val bpu_pred_target = RegInit(0.U(p(XLen).W))
+  val meta_q = Module(new Queue(new FetchMeta, 8, hasFlush = true))
 
-  mem.req.valid     := !imem_pending && !ibuffer.full
-  mem.req.bits.addr := pc
-  mem.resp.ready    := true.B
+  val drop_count   = RegInit(0.U(4.W))
+  val pending_reqs = RegInit(0.U(4.W))
+
+  val req_fire  = mem.req.valid && mem.req.ready
+  val resp_fire = mem.resp.valid && mem.resp.ready
+
+  val next_drop_count = drop_count + pending_reqs
+  val is_dropping     = resp_fire && (next_drop_count > 0.U)
+
+  when(do_redirect) {
+    drop_count   := next_drop_count - Mux(is_dropping, 1.U, 0.U)
+    pending_reqs := 0.U
+  }.otherwise {
+    when(req_fire && !resp_fire) {
+      pending_reqs := pending_reqs + 1.U
+    }.elsewhen(!req_fire && resp_fire) {
+      pending_reqs := pending_reqs - 1.U
+    }
+
+    when(resp_fire && drop_count > 0.U) {
+      drop_count := drop_count - 1.U
+    }
+  }
+
+  val is_valid_resp = (drop_count === 0.U) && !do_redirect
+  meta_q.io.flush.get := do_redirect
+
+  val align_bytes   = p(IssueWidth) * (p(ILen) / 8)
+  val align_mask    = ~(align_bytes - 1).U(p(XLen).W)
+  val aligned_pc    = pc & align_mask
+  val next_block_pc = aligned_pc + align_bytes.U
+
+  mem.req.valid     := meta_q.io.enq.ready && ibuffer.io.enq_ready && !do_redirect
+  mem.req.bits.addr := aligned_pc
+  mem.resp.ready    := ibuffer.io.enq_ready
 
   fetch_pc := pc
 
-  val icache_req_fire  = mem.req.valid && mem.req.ready
-  val icache_resp_fire = mem.resp.valid && mem.resp.ready
-
-  when(icache_req_fire) {
-    imem_pending    := true.B
-    imem_pc         := pc
-    imem_valid      := true.B
-    bpu_pred_taken  := bpu_taken_in
-    bpu_pred_target := bpu_target_in
-  }
-
-  val do_redirect = take_trap || bru_taken || bru_not_taken
-
-  when(do_redirect) {
-    imem_valid     := false.B
-    bpu_pred_taken := false.B
-  }
-
-  when(icache_resp_fire) {
-    imem_data    := mem.resp.bits.data
-    imem_pending := false.B
-  }
-
-  when(reset_ibuffer_reg) {
-    imem_valid := false.B
-  }
-
-  when(do_redirect) {
-    reset_ibuffer_reg := true.B
-  }
-
-  when(ibuffer.empty && !imem_pending) {
-    reset_ibuffer_reg := false.B
-  }
-
-  ibuffer.flush := do_redirect
-
-  ibuffer.enq.valid                := icache_resp_fire && imem_valid && !ibuffer.full
-  ibuffer.enq.bits.pc              := imem_pc
-  ibuffer.enq.bits.instr           := mem.resp.bits.data
-  ibuffer.enq.bits.bpu_pred_taken  := bpu_pred_taken
-  ibuffer.enq.bits.bpu_pred_target := bpu_pred_target
-
-  val flush_cond = (do_redirect || !imem_valid || reset_ibuffer_reg) && !lsu_busy
-
-  for (w <- 0 until p(IssueWidth)) {
-    ibuffer.deq(w).ready := dispatch_fire(w)
-
-    if_valid(w)           := ibuffer.deq(w).valid && !flush_cond
-    if_instr(w)           := Mux(if_valid(w), ibuffer.deq(w).bits.instr, p(Bubble).value.U(p(ILen).W))
-    if_pc(w)              := Mux(if_valid(w), ibuffer.deq(w).bits.pc, 0.U(p(XLen).W))
-    if_bpu_pred_taken(w)  := Mux(if_valid(w), ibuffer.deq(w).bits.bpu_pred_taken, false.B)
-    if_bpu_pred_target(w) := Mux(if_valid(w), ibuffer.deq(w).bits.bpu_pred_target, 0.U(p(XLen).W))
-  }
-
-  fronend_flush := flush_cond
-  reset_ibuffer := reset_ibuffer_reg
+  meta_q.io.enq.valid                := req_fire
+  meta_q.io.enq.bits.pc              := pc
+  meta_q.io.enq.bits.bpu_pred_taken  := bpu_taken_in
+  meta_q.io.enq.bits.bpu_pred_target := bpu_target_in
 
   when(take_trap && !lsu_busy) {
     pc := trap_target
@@ -120,7 +100,38 @@ class Ifu(implicit p: Parameters) extends Module {
     pc := bru_target
   }.elsewhen(bru_not_taken && !lsu_busy) {
     pc := bru_branch_pc + 4.U
-  }.elsewhen(ibuffer.enq.fire) {
-    pc := Mux(bpu_pred_taken, bpu_pred_target, pc + 4.U(p(XLen).W))
+  }.elsewhen(req_fire) {
+    pc := Mux(bpu_taken_in, bpu_target_in, next_block_pc)
   }
+
+  meta_q.io.deq.ready := resp_fire && is_valid_resp
+
+  val resp_pc  = meta_q.io.deq.bits.pc
+  val resp_idx = if (p(IssueWidth) > 1) resp_pc(log2Ceil(align_bytes) - 1, log2Ceil(p(ILen) / 8)) else 0.U
+
+  for (w <- 0 until p(IssueWidth)) {
+    val is_valid_pos = w.U >= resp_idx
+    ibuffer.io.enq_valid(w)                := resp_fire && is_valid_resp && meta_q.io.deq.valid && is_valid_pos
+    ibuffer.io.enq_bits(w).pc              := (resp_pc & align_mask) + (w * (p(ILen) / 8)).U
+    ibuffer.io.enq_bits(w).instr           := mem.resp.bits.data(w)
+    ibuffer.io.enq_bits(w).bpu_pred_taken  := meta_q.io.deq.bits.bpu_pred_taken
+    ibuffer.io.enq_bits(w).bpu_pred_target := meta_q.io.deq.bits.bpu_pred_target
+  }
+
+  ibuffer.io.flush := do_redirect
+
+  val flush_cond = do_redirect
+
+  for (w <- 0 until p(IssueWidth)) {
+    ibuffer.io.deq(w).ready := dispatch_fire(w)
+
+    if_valid(w)           := ibuffer.io.deq(w).valid && !flush_cond
+    if_instr(w)           := Mux(if_valid(w), ibuffer.io.deq(w).bits.instr, p(Bubble).value.U(p(ILen).W))
+    if_pc(w)              := Mux(if_valid(w), ibuffer.io.deq(w).bits.pc, 0.U(p(XLen).W))
+    if_bpu_pred_taken(w)  := Mux(if_valid(w), ibuffer.io.deq(w).bits.bpu_pred_taken, false.B)
+    if_bpu_pred_target(w) := Mux(if_valid(w), ibuffer.io.deq(w).bits.bpu_pred_target, 0.U(p(XLen).W))
+  }
+
+  fronend_flush := flush_cond
+  reset_ibuffer := do_redirect
 }

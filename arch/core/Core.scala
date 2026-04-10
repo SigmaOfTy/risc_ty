@@ -15,7 +15,7 @@ import arch.configs._
 import arch.configs.proto.FunctionalUnitType._
 import vopts.mem.cache.{ CacheIO, CacheReadOnlyIO, SetAssociativeCache, SetAssociativeCacheReadOnly }
 import chisel3._
-import chisel3.util.{ log2Ceil, MuxCase, Mux1H, PopCount }
+import chisel3.util.{ log2Ceil, MuxCase, Mux1H, PopCount, MuxLookup, RRArbiter, Queue }
 
 class RiscCore(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_cpu"
@@ -25,12 +25,23 @@ class RiscCore(implicit p: Parameters) extends Module {
   val mmio = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
   val irq  = IO(new CoreInterruptIO)
 
-  val bpu       = Module(new Bpu)
-  val ifu       = Module(new Ifu)
-  val decoders  = Seq.fill(p(IssueWidth))(Module(new Decoder))
-  val regfile   = Module(new Regfile)
-  val imm_gens  = Seq.fill(p(IssueWidth))(Module(new ImmGen))
-  val l1_icache = Module(new SetAssociativeCacheReadOnly(UInt(p(XLen).W), p(XLen), p(L1ICacheLineSize) / (p(XLen) / 8), p(L1ICacheSets), p(L1ICacheWays), p(L1ICacheReplPolicy)))
+  val bpu      = Module(new Bpu)
+  val ifu      = Module(new Ifu)
+  val decoders = Seq.fill(p(IssueWidth))(Module(new Decoder))
+  val regfile  = Module(new Regfile)
+  val imm_gens = Seq.fill(p(IssueWidth))(Module(new ImmGen))
+
+  val l1_icache = Module(
+    new SetAssociativeCacheReadOnly(
+      Vec(p(IssueWidth), UInt(p(ILen).W)),
+      p(XLen),
+      p(L1ICacheLineSize) / (p(IssueWidth) * (p(ILen) / 8)),
+      p(L1ICacheSets),
+      p(L1ICacheWays),
+      p(L1ICacheReplPolicy)
+    )
+  )
+
   val l1_dcache = Module(new SetAssociativeCache(UInt(p(XLen).W), p(XLen), p(L1DCacheLineSize) / (p(XLen) / 8), p(L1DCacheSets), p(L1DCacheWays), p(L1DCacheReplPolicy)))
 
   val regfile_utils = RegfileUtilitiesFactory.getOrThrow(p(ISA).name)
@@ -53,10 +64,55 @@ class RiscCore(implicit p: Parameters) extends Module {
   val csrs = fus.collect { case c: CsrFU => c }
   val brus = fus.collect { case b: BruFU => b }
 
-  val lsu_fu = lsus.headOption.getOrElse(throw new Exception("LSU Unit is mandatory but missing from configuration!"))
+  if (lsus.isEmpty) throw new Exception("LSU Unit is mandatory but missing from configuration!")
 
-  l1_dcache.upper <> lsu_fu.mem
-  mmio <> lsu_fu.mmio
+  if (lsus.length == 1) {
+    l1_dcache.upper <> lsus(0).mem
+    mmio <> lsus(0).mmio
+  } else {
+    val memReqArb = Module(new RRArbiter(chiselTypeOf(lsus(0).mem.req.bits), lsus.length))
+    for (i <- lsus.indices) memReqArb.io.in(i) <> lsus(i).mem.req
+    l1_dcache.upper.req <> memReqArb.io.out
+
+    val memRespQueue = Module(new Queue(UInt(log2Ceil(lsus.length).W), p(ROBSize)))
+    memRespQueue.io.enq.valid := memReqArb.io.out.fire
+    memRespQueue.io.enq.bits  := memReqArb.io.chosen
+    memRespQueue.io.deq.ready := l1_dcache.upper.resp.fire
+
+    val memTarget = memRespQueue.io.deq.bits
+    for (i <- lsus.indices) {
+      lsus(i).mem.resp.valid := l1_dcache.upper.resp.valid && memRespQueue.io.deq.valid && (memTarget === i.U)
+      lsus(i).mem.resp.bits  := l1_dcache.upper.resp.bits
+    }
+
+    l1_dcache.upper.resp.ready := false.B
+    for (i <- lsus.indices)
+      when(memRespQueue.io.deq.valid && memTarget === i.U) {
+        l1_dcache.upper.resp.ready := lsus(i).mem.resp.ready
+      }
+
+    val mmioReqArb = Module(new RRArbiter(chiselTypeOf(lsus(0).mmio.req.bits), lsus.length))
+    for (i <- lsus.indices) mmioReqArb.io.in(i) <> lsus(i).mmio.req
+    mmio.req <> mmioReqArb.io.out
+
+    val mmioRespQueue = Module(new Queue(UInt(log2Ceil(lsus.length).W), p(ROBSize)))
+    mmioRespQueue.io.enq.valid := mmioReqArb.io.out.fire
+    mmioRespQueue.io.enq.bits  := mmioReqArb.io.chosen
+    mmioRespQueue.io.deq.ready := mmio.resp.fire
+
+    val mmioTarget = mmioRespQueue.io.deq.bits
+    for (i <- lsus.indices) {
+      lsus(i).mmio.resp.valid := mmio.resp.valid && mmioRespQueue.io.deq.valid && (mmioTarget === i.U)
+      lsus(i).mmio.resp.bits  := mmio.resp.bits
+    }
+
+    mmio.resp.ready := false.B
+    for (i <- lsus.indices)
+      when(mmioRespQueue.io.deq.valid && mmioTarget === i.U) {
+        mmio.resp.ready := lsus(i).mmio.resp.ready
+      }
+  }
+
   dmem <> l1_dcache.lower
 
   csrs.foreach { csr =>
@@ -66,8 +122,13 @@ class RiscCore(implicit p: Parameters) extends Module {
   val commit_pops = rob.io.commit.map(_.pop)
   val commit_fire = commit_pops.reduce(_ || _)
 
-  val commit_flush_pipeline = rob.io.commit.map(c => c.pop && c.flush_pipeline).reduce(_ || _)
-  val commit_flush_target   = Mux1H(rob.io.commit.map(c => (c.pop && c.flush_pipeline) -> c.flush_target))
+  val is_flush = Wire(Vec(p(IssueWidth), Bool()))
+  for (w <- 0 until p(IssueWidth)) {
+    is_flush(w) := rob.io.commit(w).pop && rob.io.commit(w).flush_pipeline
+  }
+  
+  val commit_flush_pipeline = is_flush.reduce(_ || _)
+  val commit_flush_target   = Mux1H(is_flush.zipWithIndex.map { case (f, w) => f -> rob.io.commit(w).flush_target })
 
   val async_trap_req = if (csrs.nonEmpty) csrs.map(c => c.trap_request && !c.is_busy).foldLeft(false.B)(_ || _) else false.B
   val async_trap_tgt = if (csrs.nonEmpty) Mux1H(csrs.map(c => (c.trap_request && !c.is_busy) -> c.trap_target)) else 0.U(p(XLen).W)
@@ -75,7 +136,12 @@ class RiscCore(implicit p: Parameters) extends Module {
   val global_flush = commit_flush_pipeline || async_trap_req
   val redirect_pc  = Mux(async_trap_req, async_trap_tgt, commit_flush_target)
 
-  imem <> l1_icache.lower
+  imem.req <> l1_icache.lower.req
+  imem.resp.ready                := l1_icache.lower.resp.ready
+  l1_icache.lower.resp.valid     := imem.resp.valid
+  l1_icache.lower.resp.bits.hit  := imem.resp.bits.hit
+  l1_icache.lower.resp.bits.data := imem.resp.bits.data.asTypeOf(chiselTypeOf(l1_icache.lower.resp.bits.data))
+
   ifu.mem <> l1_icache.upper
 
   bpu.query_pc      := ifu.fetch_pc
@@ -121,23 +187,105 @@ class RiscCore(implicit p: Parameters) extends Module {
     if (w > 0) when(is_csr(w)) { csr_active = true.B }
   }
 
-  val valid_reqs = Wire(Vec(p(IssueWidth), Bool()))
+  val aluIds  = p(FunctionalUnits).zipWithIndex.filter(_._1.`type` == FUNCTIONAL_UNIT_TYPE_ALU).map(_._2.U)
+  val multIds = p(FunctionalUnits).zipWithIndex.filter(_._1.`type` == FUNCTIONAL_UNIT_TYPE_MULT).map(_._2.U)
+  val lsuIds  = p(FunctionalUnits).zipWithIndex.filter(_._1.`type` == FUNCTIONAL_UNIT_TYPE_LSU).map(_._2.U)
+  val bruIds  = p(FunctionalUnits).zipWithIndex.filter(_._1.`type` == FUNCTIONAL_UNIT_TYPE_BRU).map(_._2.U)
+  val csrIds  = p(FunctionalUnits).zipWithIndex.filter(_._1.`type` == FUNCTIONAL_UNIT_TYPE_CSR).map(_._2.U)
+
+  val wants_to_issue = Wire(Vec(p(IssueWidth), Bool()))
+  val inst_type      = Wire(Vec(p(IssueWidth), UInt(3.W)))
+
+  val TYPE_ALU  = 0.U(3.W)
+  val TYPE_LSU  = 1.U(3.W)
+  val TYPE_MULT = 2.U(3.W)
+  val TYPE_BRU  = 3.U(3.W)
+  val TYPE_CSR  = 4.U(3.W)
+
+  val kill_mask = Wire(Vec(p(IssueWidth), Bool()))
+  kill_mask(0)   := false.B
+  for (w <- 1 until p(IssueWidth))
+    kill_mask(w) := kill_mask(w - 1) || (ifu.if_valid(w - 1) && ifu.if_bpu_pred_taken(w - 1))
+
+  for (w <- 0 until p(IssueWidth)) {
+    wants_to_issue(w) := ifu.if_valid(w) && !is_bubble(w) && !hazard(w) && !global_flush && !kill_mask(w)
+
+    inst_type(w) := MuxCase(
+      TYPE_ALU,
+      Seq(
+        decoders(w).decoded.lsu                              -> TYPE_LSU,
+        decoders(w).decoded.mult_en                          -> TYPE_MULT,
+        decoders(w).decoded.branch                           -> TYPE_BRU,
+        (decoders(w).decoded.csr || decoders(w).decoded.ret) -> TYPE_CSR
+      )
+    )
+  }
+
+  val intra_hazard = Wire(Vec(p(IssueWidth), Bool()))
+  intra_hazard(0) := false.B
+  for (w <- 1 until p(IssueWidth)) {
+    val conflicts = (0 until w).map { v =>
+      val rd_v = Mux(decoders(v).decoded.regwrite, rds(v), 0.U)
+      val is_issuing = wants_to_issue(v)
+      is_issuing && rd_v =/= 0.U && (rs1s(w) === rd_v || rs2s(w) === rd_v)
+    }
+    intra_hazard(w) := conflicts.reduce(_ || _)
+  }
+
+  val struct_hazard = Wire(Vec(p(IssueWidth), Bool()))
+  val target_fu_id  = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(FunctionalUnits).size).W)))
+
+  for (w <- 0 until p(IssueWidth)) {
+    val alu_used  = PopCount((0 until w).map(i => wants_to_issue(i) && !intra_hazard(i) && inst_type(i) === TYPE_ALU && !struct_hazard(i)))
+    val lsu_used  = PopCount((0 until w).map(i => wants_to_issue(i) && !intra_hazard(i) && inst_type(i) === TYPE_LSU && !struct_hazard(i)))
+    val mult_used = PopCount((0 until w).map(i => wants_to_issue(i) && !intra_hazard(i) && inst_type(i) === TYPE_MULT && !struct_hazard(i)))
+    val bru_used  = PopCount((0 until w).map(i => wants_to_issue(i) && !intra_hazard(i) && inst_type(i) === TYPE_BRU && !struct_hazard(i)))
+    val csr_used  = PopCount((0 until w).map(i => wants_to_issue(i) && !intra_hazard(i) && inst_type(i) === TYPE_CSR && !struct_hazard(i)))
+
+    def getId(used: UInt, ids: Seq[UInt]): UInt =
+      if (ids.isEmpty) 0.U
+      else MuxLookup(used, ids.head)(ids.zipWithIndex.map { case (id, idx) => idx.U -> id })
+
+    struct_hazard(w) := MuxCase(
+      false.B,
+      Seq(
+        (inst_type(w) === TYPE_ALU)  -> (alu_used >= aluIds.length.U),
+        (inst_type(w) === TYPE_LSU)  -> (lsu_used >= lsuIds.length.U),
+        (inst_type(w) === TYPE_MULT) -> (mult_used >= multIds.length.U),
+        (inst_type(w) === TYPE_BRU)  -> (bru_used >= bruIds.length.U),
+        (inst_type(w) === TYPE_CSR)  -> (csr_used >= csrIds.length.U)
+      )
+    )
+
+    target_fu_id(w) := MuxCase(
+      getId(alu_used, aluIds),
+      Seq(
+        (inst_type(w) === TYPE_LSU)  -> getId(lsu_used, lsuIds),
+        (inst_type(w) === TYPE_MULT) -> getId(mult_used, multIds),
+        (inst_type(w) === TYPE_BRU)  -> getId(bru_used, bruIds),
+        (inst_type(w) === TYPE_CSR)  -> getId(csr_used, csrIds)
+      )
+    )
+  }
+
   val dis_ready  = Wire(Vec(p(IssueWidth), Bool()))
   val fire       = Wire(Vec(p(IssueWidth), Bool()))
   val lane_valid = Wire(Vec(p(IssueWidth), Bool()))
   val ifu_fire   = Wire(Vec(p(IssueWidth), Bool()))
 
   for (w <- 0 until p(IssueWidth)) {
-    valid_reqs(w) := ifu.if_valid(w) && !is_bubble(w) && !hazard(w) && !global_flush
-    dis_ready(w)  := scheduler.dis_reqs(w).ready && rob.io.enq(w).ready
+    val valid_req = wants_to_issue(w) && !struct_hazard(w) && !intra_hazard(w)
+    dis_ready(w) := scheduler.dis_reqs(w).ready && rob.io.enq(w).ready
+
+    val can_consume = kill_mask(w) || (valid_req && dis_ready(w))
 
     if (w == 0) {
-      lane_valid(w) := valid_reqs(w)
-      fire(w)       := lane_valid(w) && dis_ready(w)
+      fire(w)       := can_consume
+      lane_valid(w) := valid_req && dis_ready(w)
       ifu_fire(w)   := ifu.if_valid(w) && (is_bubble(w) || global_flush || fire(w))
     } else {
-      lane_valid(w) := valid_reqs(w) && fire(w - 1)
-      fire(w)       := lane_valid(w) && dis_ready(w)
+      fire(w)       := can_consume && fire(w - 1)
+      lane_valid(w) := valid_req && dis_ready(w) && fire(w - 1)
       ifu_fire(w)   := ifu.if_valid(w) && (is_bubble(w) || global_flush || fire(w)) && ifu_fire(w - 1)
     }
   }
@@ -164,21 +312,8 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   ifu.lsu_busy := false.B
 
-  def getFuId(t: proto.FunctionalUnitType): UInt =
-    math.max(0, p(FunctionalUnits).indexWhere(_.`type` == t)).U
-
   for (w <- 0 until p(IssueWidth)) {
-    val target_fu_id = MuxCase(
-      getFuId(FUNCTIONAL_UNIT_TYPE_ALU),
-      Seq(
-        decoders(w).decoded.lsu                              -> getFuId(FUNCTIONAL_UNIT_TYPE_LSU),
-        decoders(w).decoded.mult_en                          -> getFuId(FUNCTIONAL_UNIT_TYPE_MULT),
-        (decoders(w).decoded.csr || decoders(w).decoded.ret) -> getFuId(FUNCTIONAL_UNIT_TYPE_CSR),
-        decoders(w).decoded.branch                           -> getFuId(FUNCTIONAL_UNIT_TYPE_BRU)
-      )
-    )
-
-    rob.io.enq(w).valid           := fire(w)
+    rob.io.enq(w).valid           := lane_valid(w)
     rob.io.enq(w).pc              := ifu.if_pc(w)
     rob.io.enq(w).instr           := ifu.if_instr(w)
     rob.io.enq(w).rd              := Mux(decoders(w).decoded.regwrite, rds(w), 0.U)
@@ -192,10 +327,10 @@ class RiscCore(implicit p: Parameters) extends Module {
     val rs2_bypassed = Mux(rob.io.rs2_bypass(w).valid, rob.io.rs2_bypass(w).data, regfile.rs2_data(w))
 
     val dis = scheduler.dis_reqs(w)
-    dis.valid         := fire(w)
+    dis.valid         := lane_valid(w)
     dis.bits.pc       := ifu.if_pc(w)
     dis.bits.instr    := ifu.if_instr(w)
-    dis.bits.fu_id    := target_fu_id
+    dis.bits.fu_id    := target_fu_id(w)
     dis.bits.rs1      := rs1s(w)
     dis.bits.rs2      := rs2s(w)
     dis.bits.rd       := Mux(decoders(w).decoded.regwrite, rds(w), 0.U)
