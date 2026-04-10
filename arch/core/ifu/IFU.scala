@@ -16,7 +16,7 @@ class Ifu(implicit p: Parameters) extends Module {
 
   val bru_taken       = IO(Input(Bool()))
   val bru_target      = IO(Input(UInt(p(XLen).W)))
-  val id_ex_stall     = IO(Input(Bool()))
+  val stall           = IO(Input(Bool()))
   val load_use_hazard = IO(Input(Bool()))
   val lsu_busy        = IO(Input(Bool()))
 
@@ -102,7 +102,7 @@ class Ifu(implicit p: Parameters) extends Module {
   ibuffer.enq.bits.bpu_pred_taken  := bpu_pred_taken
   ibuffer.enq.bits.bpu_pred_target := bpu_pred_target
 
-  val stall_cond = id_ex_stall || load_use_hazard
+  val stall_cond = stall || load_use_hazard
   val flush_cond = (do_redirect || !imem_valid || reset_ibuffer_reg) && !lsu_busy
 
   ibuffer.deq.ready := (!ibuffer.empty && !stall_cond && !flush_cond) || reset_ibuffer_reg
