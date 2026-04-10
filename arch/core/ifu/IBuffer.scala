@@ -14,40 +14,62 @@ class IBufferEntry(implicit p: Parameters) extends Bundle {
 class IBuffer(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_ibuffer"
 
-  val enq   = IO(Flipped(Decoupled(new IBufferEntry)))
-  val deq   = IO(Vec(p(IssueWidth), Decoupled(new IBufferEntry)))
-  val empty = IO(Output(Bool()))
-  val full  = IO(Output(Bool()))
-  val flush = IO(Input(Bool()))
+  val io = IO(new Bundle {
+    val enq_valid = Input(Vec(p(IssueWidth), Bool()))
+    val enq_bits  = Input(Vec(p(IssueWidth), new IBufferEntry))
+    val enq_ready = Output(Bool())
+
+    val deq   = Vec(p(IssueWidth), Decoupled(new IBufferEntry))
+    val empty = Output(Bool())
+    val full  = Output(Bool())
+    val flush = Input(Bool())
+  })
 
   val buffer = Reg(Vec(p(IBufferSize), new IBufferEntry))
   val count  = RegInit(0.U(log2Ceil(p(IBufferSize) + 1).W))
   val head   = RegInit(0.U(log2Ceil(p(IBufferSize)).W))
   val tail   = RegInit(0.U(log2Ceil(p(IBufferSize)).W))
 
-  enq.ready := count < p(IBufferSize).U
-  val do_enq = enq.fire
-  when(do_enq)(buffer(tail) := enq.bits)
+  val enq_valids = io.enq_valid.map(_.asUInt)
+  val enq_count  = PopCount(io.enq_valid)
 
-  val deq_fires = deq.map(_.fire)
+  val enq_offsets = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(IBufferSize)).W)))
+  enq_offsets(0)   := 0.U
+  for (w <- 1 until p(IssueWidth))
+    enq_offsets(w) := (enq_offsets(w - 1) + enq_valids(w - 1))(log2Ceil(p(IBufferSize)) - 1, 0)
+
+  io.enq_ready := (p(IBufferSize).U - count) >= p(IssueWidth).U
+  val do_enq = io.enq_ready && io.enq_valid.reduce(_ || _)
+
+  when(do_enq) {
+    for (w <- 0 until p(IssueWidth))
+      when(io.enq_valid(w)) {
+        val idx = ((tail + enq_offsets(w)) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
+        buffer(idx) := io.enq_bits(w)
+      }
+  }
+
+  val deq_fires = io.deq.map(_.fire)
   val deq_count = PopCount(deq_fires)
 
   for (w <- 0 until p(IssueWidth)) {
-    deq(w).valid := count > w.U
+    io.deq(w).valid := count > w.U
     val idx = if (w == 0) head else ((head + w.U) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
-    deq(w).bits := buffer(idx)
+    io.deq(w).bits := buffer(idx)
   }
 
-  head  := ((head + deq_count)     % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
-  tail  := ((tail + do_enq.asUInt) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
-  count := count + do_enq.asUInt - deq_count
+  head := ((head + deq_count) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
 
-  when(flush) {
+  val actual_enq_count = Mux(do_enq, enq_count, 0.U)
+  tail  := ((tail + actual_enq_count) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
+  count := count + actual_enq_count - deq_count
+
+  when(io.flush) {
     count := 0.U
     head  := 0.U
     tail  := 0.U
   }
 
-  empty := count === 0.U
-  full  := count === p(IBufferSize).U
+  io.empty := count === 0.U
+  io.full  := count === p(IBufferSize).U
 }

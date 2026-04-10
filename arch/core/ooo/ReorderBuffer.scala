@@ -2,7 +2,7 @@ package arch.core.ooo
 
 import arch.configs._
 import chisel3._
-import chisel3.util._
+import chisel3.util.{ log2Ceil, PopCount, MuxCase }
 
 class RobEnqIO(implicit p: Parameters) extends Bundle {
   val valid           = Input(Bool())
@@ -136,19 +136,27 @@ class ReorderBuffer(implicit p: Parameters) extends Module {
       wb_entry.ready := true.B
       wb_entry.data  := io.wb(i).data
 
-      val is_mispredict = io.wb(i).is_bru && (
+      val bru_mispredict = io.wb(i).is_bru && (
         (io.wb(i).actual_taken =/= wb_entry.pred_taken) ||
           (io.wb(i).actual_taken && io.wb(i).actual_target =/= wb_entry.pred_target)
       )
 
+      val non_bru_mispredict = !io.wb(i).is_bru && wb_entry.pred_taken
+      val is_mispredict      = bru_mispredict || non_bru_mispredict
+
       when(io.wb(i).is_bru) {
         wb_entry.actual_taken  := io.wb(i).actual_taken
         wb_entry.actual_target := io.wb(i).actual_target
+      }.elsewhen(non_bru_mispredict) {
+        wb_entry.actual_taken  := false.B
+        wb_entry.actual_target := wb_entry.pc + 4.U
       }
+
+      val target = Mux(io.wb(i).is_bru, io.wb(i).actual_target, wb_entry.pc + 4.U)
 
       wb_entry.flush_pipeline := is_mispredict || io.wb(i).trap_req || io.wb(i).trap_ret
       wb_entry.flush_target   := MuxCase(
-        io.wb(i).actual_target,
+        target,
         Seq(
           io.wb(i).trap_req -> io.wb(i).trap_target,
           io.wb(i).trap_ret -> io.wb(i).trap_ret_tgt
