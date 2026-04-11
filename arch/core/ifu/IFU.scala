@@ -26,11 +26,11 @@ class Ifu(implicit p: Parameters) extends Module {
 
   val fronend_flush = IO(Output(Bool()))
 
+  val if_valid           = IO(Output(Vec(p(IssueWidth), Bool())))
   val if_instr           = IO(Output(Vec(p(IssueWidth), UInt(p(ILen).W))))
   val if_pc              = IO(Output(Vec(p(IssueWidth), UInt(p(XLen).W))))
   val if_bpu_pred_taken  = IO(Output(Vec(p(IssueWidth), Bool())))
   val if_bpu_pred_target = IO(Output(Vec(p(IssueWidth), UInt(p(XLen).W))))
-  val if_valid           = IO(Output(Vec(p(IssueWidth), Bool())))
 
   val dispatch_fire = IO(Input(Vec(p(IssueWidth), Bool())))
 
@@ -128,10 +128,10 @@ class Ifu(implicit p: Parameters) extends Module {
     ibuffer.io.deq(w).ready := dispatch_fire(w)
 
     if_valid(w)           := ibuffer.io.deq(w).valid && !flush_cond
-    if_instr(w)           := Mux(if_valid(w), ibuffer.io.deq(w).bits.instr, p(Bubble).value.U(p(ILen).W))
-    if_pc(w)              := Mux(if_valid(w), ibuffer.io.deq(w).bits.pc, 0.U(p(XLen).W))
-    if_bpu_pred_taken(w)  := Mux(if_valid(w), ibuffer.io.deq(w).bits.bpu_pred_taken, false.B)
-    if_bpu_pred_target(w) := Mux(if_valid(w), ibuffer.io.deq(w).bits.bpu_pred_target, 0.U(p(XLen).W))
+    if_instr(w)           := ibuffer.io.deq(w).bits.instr
+    if_pc(w)              := ibuffer.io.deq(w).bits.pc
+    if_bpu_pred_taken(w)  := ibuffer.io.deq(w).bits.bpu_pred_taken
+    if_bpu_pred_target(w) := ibuffer.io.deq(w).bits.bpu_pred_target
   }
 
   fronend_flush := flush_cond

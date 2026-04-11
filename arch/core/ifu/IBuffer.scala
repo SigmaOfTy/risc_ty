@@ -2,7 +2,7 @@ package arch.core.ifu
 
 import arch.configs._
 import chisel3._
-import chisel3.util.{ Decoupled, PopCount, log2Ceil }
+import chisel3.util.{ Decoupled, PopCount, log2Ceil, isPow2 }
 
 class IBufferEntry(implicit p: Parameters) extends Bundle {
   val pc              = UInt(p(XLen).W)
@@ -13,6 +13,8 @@ class IBufferEntry(implicit p: Parameters) extends Bundle {
 
 class IBuffer(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_ibuffer"
+
+  require(isPow2(p(IBufferSize)), "IBufferSize must be a power of 2")
 
   val io = IO(new Bundle {
     val enq_valid = Input(Vec(p(IssueWidth), Bool()))
@@ -41,10 +43,12 @@ class IBuffer(implicit p: Parameters) extends Module {
   io.enq_ready := (p(IBufferSize).U - count) >= p(IssueWidth).U
   val do_enq = io.enq_ready && io.enq_valid.reduce(_ || _)
 
+  val mask = (p(IBufferSize) - 1).U
+
   when(do_enq) {
     for (w <- 0 until p(IssueWidth))
       when(io.enq_valid(w)) {
-        val idx = ((tail + enq_offsets(w)) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
+        val idx = ((tail + enq_offsets(w)) & mask)(log2Ceil(p(IBufferSize)) - 1, 0)
         buffer(idx) := io.enq_bits(w)
       }
   }
@@ -54,14 +58,14 @@ class IBuffer(implicit p: Parameters) extends Module {
 
   for (w <- 0 until p(IssueWidth)) {
     io.deq(w).valid := count > w.U
-    val idx = if (w == 0) head else ((head + w.U) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
+    val idx = if (w == 0) head else ((head + w.U) & mask)(log2Ceil(p(IBufferSize)) - 1, 0)
     io.deq(w).bits := buffer(idx)
   }
 
-  head := ((head + deq_count) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
+  head := ((head + deq_count) & mask)(log2Ceil(p(IBufferSize)) - 1, 0)
 
   val actual_enq_count = Mux(do_enq, enq_count, 0.U)
-  tail  := ((tail + actual_enq_count) % p(IBufferSize).U)(log2Ceil(p(IBufferSize)) - 1, 0)
+  tail  := ((tail + actual_enq_count) & mask)(log2Ceil(p(IBufferSize)) - 1, 0)
   count := count + actual_enq_count - deq_count
 
   when(io.flush) {
