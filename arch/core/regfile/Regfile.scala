@@ -10,9 +10,9 @@ class Regfile(implicit p: Parameters) extends Module {
 
   val utils = RegfileUtilitiesFactory.getOrThrow(p(ISA).name)
 
-  val rs1_preg   = IO(Input(Vec(p(IssueWidth), UInt(log2Ceil(p(NumPhyRegs)).W))))
-  val rs2_preg   = IO(Input(Vec(p(IssueWidth), UInt(log2Ceil(p(NumPhyRegs)).W))))
-  val write_preg = IO(Input(Vec(p(IssueWidth), UInt(log2Ceil(p(NumPhyRegs)).W))))
+  val rs1_preg   = IO(Input(Vec(p(IssueWidth), UInt(log2Ceil(p(NumArchRegs)).W))))
+  val rs2_preg   = IO(Input(Vec(p(IssueWidth), UInt(log2Ceil(p(NumArchRegs)).W))))
+  val write_preg = IO(Input(Vec(p(IssueWidth), UInt(log2Ceil(p(NumArchRegs)).W))))
   val write_data = IO(Input(Vec(p(IssueWidth), UInt(p(XLen).W))))
   val write_en   = IO(Input(Vec(p(IssueWidth), Bool())))
 
@@ -21,7 +21,7 @@ class Regfile(implicit p: Parameters) extends Module {
 
   val multi_port_regfile = Module(
     new MultiPortRegFile(
-      p(NumPhyRegs),
+      p(NumArchRegs),
       p(XLen),
       p(IssueWidth),
       p(IssueWidth),
