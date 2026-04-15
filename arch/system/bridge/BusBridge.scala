@@ -24,7 +24,7 @@ class BusBridge(implicit p: Parameters) extends Module {
   dontTouch(dbus)
   dontTouch(mbus)
 
-  ibus <> utils.createBridgeReadOnly(Vec(p(IssueWidth), UInt(p(ILen).W)), imem)
-  dbus <> utils.createBridge(UInt(p(XLen).W), dmem)
-  mbus <> utils.createBridge(UInt(p(XLen).W), mmio)
+  ibus <> utils.createBridgeReadOnly(Vec(p(IssueWidth), UInt(p(ILen).W)), imem, isMmio = false)
+  dbus <> utils.createBridge(UInt(p(XLen).W), dmem, isMmio = false)
+  mbus <> utils.createBridge(UInt(p(XLen).W), mmio, isMmio = true)
 }
