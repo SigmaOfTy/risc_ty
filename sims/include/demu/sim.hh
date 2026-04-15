@@ -73,7 +73,7 @@ public:
     return _branches_committed > 0
                ? 1.0 -
                      static_cast<double>(_bpu_mispredicts) / _branches_committed
-               : 1.0;
+               : 0.0;
   }
   [[nodiscard]] auto issue_rate() const noexcept -> double {
     return dut_->debug_cycle_count > 0

@@ -25,8 +25,8 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       val wordsPerRequest = memory.req.bits.data.getWidth / p(XLen)
       val wordsPerRespond = memory.resp.bits.data.getWidth / p(XLen)
 
-      val writeBurstLen = (wordsPerRequest - 1).U(8.W)
-      val readBurstLen  = (wordsPerRespond - 1).U(8.W)
+      val writeBurstLen = (wordsPerRequest - 1).max(0).U(8.W)
+      val readBurstLen  = (wordsPerRespond - 1).max(0).U(8.W)
       val bytesPerWord  = p(XLen) / 8
 
       val w_blockMask = ~((wordsPerRequest * bytesPerWord) - 1).U(p(XLen).W)
@@ -169,6 +169,7 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
 
       memory.resp.bits.data := Cat(final_data_vec.reverse).asTypeOf(memory.resp.bits.data)
       memory.resp.bits.hit  := true.B
+      memory.resp.bits.last := true.B
 
       axi
     }
@@ -177,7 +178,7 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
       val axi = Wire(new AXIFullMasterIO(addrWidth = p(XLen), dataWidth = p(XLen), idWidth = 4))
 
       val wordsPerRespond = memory.resp.bits.data.getWidth / p(XLen)
-      val readBurstLen    = (wordsPerRespond - 1).U(8.W)
+      val readBurstLen    = (wordsPerRespond - 1).max(0).U(8.W)
       val bytesPerWord    = p(XLen) / 8
 
       val blockMask = ~((wordsPerRespond * bytesPerWord) - 1).U(p(XLen).W)
@@ -253,6 +254,7 @@ object AXIFullBridgeUtilities extends RegisteredUtilities[BusBridgeUtilities] {
 
       memory.resp.bits.data := Cat(final_data_vec.reverse).asTypeOf(memory.resp.bits.data)
       memory.resp.bits.hit  := true.B
+      memory.resp.bits.last := true.B
 
       axi
     }

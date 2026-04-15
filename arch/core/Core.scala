@@ -20,8 +20,8 @@ import chisel3.util.{ log2Ceil, MuxCase, Mux1H, PopCount, MuxLookup, RRArbiter, 
 class RiscCore(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_cpu"
 
-  val imem = IO(new CacheReadOnlyIO(Vec(p(L1ICacheLineSize) / (p(XLen) / 8), UInt(p(XLen).W)), p(ILen)))
-  val dmem = IO(new CacheIO(Vec(p(L1DCacheLineSize) / (p(XLen) / 8), UInt(p(XLen).W)), p(XLen)))
+  val imem = IO(new CacheReadOnlyIO(Vec(p(IssueWidth), UInt(p(ILen).W)), p(XLen)))
+  val dmem = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
   val mmio = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
   val irq  = IO(new CoreInterruptIO)
 
@@ -161,13 +161,9 @@ class RiscCore(implicit p: Parameters) extends Module {
   }
 
   dmem <> l1_dcache.lower
-  csrs.foreach(csr => csr.arch_pc := Mux(rob.io.empty, ifu.if_pc(0), rob.io.commit(0).pc))
+  imem <> l1_icache.lower
 
-  imem.req <> l1_icache.lower.req
-  imem.resp.ready                := l1_icache.lower.resp.ready
-  l1_icache.lower.resp.valid     := imem.resp.valid
-  l1_icache.lower.resp.bits.hit  := imem.resp.bits.hit
-  l1_icache.lower.resp.bits.data := imem.resp.bits.data.asTypeOf(chiselTypeOf(l1_icache.lower.resp.bits.data))
+  csrs.foreach(csr => csr.arch_pc := Mux(rob.io.empty, ifu.if_pc(0), rob.io.commit(0).pc))
 
   ifu.mem <> l1_icache.upper
 
