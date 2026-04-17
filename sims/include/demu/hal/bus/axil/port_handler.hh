@@ -25,7 +25,7 @@
   name.rvalid = &dut->M_AXIL_##port_id##_RVALID;                               \
   name.rready = &dut->M_AXIL_##port_id##_RREADY;
 
-namespace demu::hal::axi {
+namespace demu::hal::axil {
 
 struct AXILiteSignals {
   addr_t *awaddr;
@@ -102,18 +102,18 @@ private:
   SignalProvider provider_;
 };
 
-} // namespace demu::hal::axi
+} // namespace demu::hal::axil
 
 namespace demu::hal {
 
 #define DEMU_BIND_AXIL_PORT(PORT_ID)                                           \
   template <typename DUT>                                                      \
   struct SignalBinder<                                                         \
-      DUT, demu::hal::axi::AXILitePortHandler, PORT_ID,                        \
+      DUT, demu::hal::axil::AXILitePortHandler, PORT_ID,                       \
       std::void_t<decltype(std::declval<DUT>().M_AXIL_##PORT_ID##_AWADDR)>> {  \
     static constexpr bool exists = true;                                       \
-    static auto bind(DUT *dut) -> demu::hal::axi::AXILiteSignals {             \
-      demu::hal::axi::AXILiteSignals s;                                        \
+    static auto bind(DUT *dut) -> demu::hal::axil::AXILiteSignals {            \
+      demu::hal::axil::AXILiteSignals s;                                       \
       MAP_AXIL_SIGNALS(dut, s, PORT_ID);                                       \
       return s;                                                                \
     }                                                                          \

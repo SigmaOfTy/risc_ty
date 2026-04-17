@@ -1,6 +1,6 @@
 #include "demu/hal/bus/axil/uart.hh"
 
-namespace demu::hal::axi {
+namespace demu::hal::axil {
 
 void AXILiteUART::reset() {
   uart_->reset();
@@ -63,4 +63,4 @@ void AXILiteUART::dump(addr_t start, size_t size) const noexcept {
   uart_->dump(start, size);
 }
 
-} // namespace demu::hal::axi
+} // namespace demu::hal::axil

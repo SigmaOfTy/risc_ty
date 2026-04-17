@@ -2,14 +2,25 @@
 
 #include "../../allocator.hh"
 #include "../../interrupt.hh"
-#include "../axif/interrupt.hh"
 #include "./slave.hh"
 #include <memory>
 #include <queue>
 
 #if defined(__ISA_RV32I__) || defined(__ISA_RV32IM__)
 
-namespace demu::hal::axi {
+namespace demu::hal::axil {
+
+enum ClintRegisters : addr_t {
+  CLINT_MSIP = 0x0000,
+  CLINT_MTIMECMP_LO = 0x4000,
+  CLINT_MTIMECMP_HI = 0x4004,
+  CLINT_MTIME_LO = 0xBFF8,
+  CLINT_MTIME_HI = 0x8FFC
+};
+
+constexpr const uint64_t TICK_MS_DIVIDER = 1000;
+constexpr const uint64_t TICK_US_DIVIDER = TICK_MS_DIVIDER * 1000;
+constexpr const uint64_t TICK_NS_DIVIDER = TICK_US_DIVIDER * 1000;
 
 class AXILiteCLINT final : public AXILiteSlave {
 public:
@@ -98,6 +109,6 @@ private:
   void process_reads();
 };
 
-} // namespace demu::hal::axi
+} // namespace demu::hal::axil
 
 #endif // defined(__ISA_RV32I__) || defined(__ISA_RV32IM__)
