@@ -5,7 +5,7 @@
 #include "./slave.hh"
 #include <queue>
 
-namespace demu::hal::axi {
+namespace demu::hal::axil {
 
 class AXILiteUART final : public AXILiteSlave {
 public:
@@ -89,4 +89,4 @@ private:
   void process_reads();
 };
 
-} // namespace demu::hal::axi
+} // namespace demu::hal::axil

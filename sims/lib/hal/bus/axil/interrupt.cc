@@ -2,7 +2,7 @@
 
 #if defined(__ISA_RV32I__) || defined(__ISA_RV32IM__)
 
-namespace demu::hal::axi {
+namespace demu::hal::axil {
 
 void AXILiteCLINT::reset() {
   allocator_->clear();
@@ -141,6 +141,6 @@ void AXILiteCLINT::dump(addr_t start, size_t size) const noexcept {
   }
 }
 
-} // namespace demu::hal::axi
+} // namespace demu::hal::axil
 
 #endif // defined(__ISA_RV32I__) || defined(__ISA_RV32IM__)
