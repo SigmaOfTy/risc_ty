@@ -1,11 +1,5 @@
 package arch.core.decoder
 
-import arch.core.bru._
-import arch.core.imm._
-import arch.core.alu._
-import arch.core.lsu._
-import arch.core.regfile._
-import arch.core.csr._
 import arch.configs._
 import chisel3._
 import chisel3.util.BitPat
@@ -66,9 +60,9 @@ trait DecoderUtilities extends Utilities {
   def table: Array[(BitPat, List[BitPat])]
 }
 
-object DecoderUtilitiesFactory extends UtilitiesFactory[DecoderUtilities]("Decoder")
+object DecoderUtilsFactory extends UtilsFactory[DecoderUtils]("Decoder")
 
 object DecoderInit {
-  val rv32iUtils  = RV32IDecoderUtilities
-  val rv32imUtils = RV32IMDecoderUtilities
+  val rv32iUtils  = riscv.RV32IDecoderUtils
+  val rv32imUtils = riscv.RV32IMDecoderUtils
 }

@@ -1,11 +1,15 @@
-package arch.core.decoder
+package arch.core.decoder.riscv
 
+import arch.core.mult.riscv._
+import arch.core.decoder._
 import arch.configs._
 import arch.isa._
 import chisel3._
 import chisel3.util.BitPat
 
-object RV32IMDecoderUtilities extends RegisteredUtilities[DecoderUtilities] with RV32IDecoderConsts {
+trait RV32IMUOp extends RV32IUOp with RV32IMMultUOpConsts {}
+
+object RV32IMDecoderUtils extends RegisteredUtils[DecoderUtils] with RV32IMUOp {
 
   private val allEncodings =
     RV32IM.isa.instrSet
@@ -26,9 +30,9 @@ object RV32IMDecoderUtilities extends RegisteredUtilities[DecoderUtilities] with
     BitPat("b" + bits)
   }
 
-  override def utils: DecoderUtilities = new DecoderUtilities {
+  override def utils: DecoderUtils = new DecoderUtils {
     override def name: String          = "rv32im"
-    override def default: List[BitPat] = RV32IDecoderUtilities.utils.default
+    override def default: List[BitPat] = RV32IDecoderUtils.utils.default
 
     override def decode(instr: UInt): DecodedOutput = {
       val sigs    = Wire(new DecodedOutput)
@@ -92,15 +96,15 @@ object RV32IMDecoderUtilities extends RegisteredUtilities[DecoderUtilities] with
       sigs
     }
 
-    override def table: Array[(BitPat, List[BitPat])] = RV32IDecoderUtilities.utils.table ++
+    override def table: Array[(BitPat, List[BitPat])] = RV32IDecoderUtils.utils.table ++
       Array(
         // R-Type: Mul
-        enc("MUL")    -> List(Y, Y, IMM_X, N, BR_X, N, A1_X, A2_X, N, AFN_X, N, M_X, N, C_X, Y, N, Y, Y, N),
-        enc("MULH")   -> List(Y, Y, IMM_X, N, BR_X, N, A1_X, A2_X, N, AFN_X, N, M_X, N, C_X, Y, Y, Y, Y, N),
-        enc("MULHSU") -> List(Y, Y, IMM_X, N, BR_X, N, A1_X, A2_X, N, AFN_X, N, M_X, N, C_X, Y, Y, Y, N, N),
-        enc("MULHU")  -> List(Y, Y, IMM_X, N, BR_X, N, A1_X, A2_X, N, AFN_X, N, M_X, N, C_X, Y, Y, N, N, N),
+        enc("MUL")    -> List(Y, N, IMM_X, N, N, N, N, N, Y, UOP_MUL),
+        enc("MULH")   -> List(Y, N, IMM_X, N, N, N, N, N, Y, UOP_MULH),
+        enc("MULHSU") -> List(Y, N, IMM_X, N, N, N, N, N, Y, UOP_MULHSU),
+        enc("MULHU")  -> List(Y, N, IMM_X, N, N, N, N, N, Y, UOP_MULHU)
       )
   }
 
-  override def factory: UtilitiesFactory[DecoderUtilities] = DecoderUtilitiesFactory
+  override def factory: UtilsFactory[DecoderUtils] = DecoderUtilsFactory
 }
