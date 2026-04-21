@@ -1,7 +1,7 @@
 PROJECT_DIR = $(shell pwd)
 CMAKE_DIR = $(PROJECT_DIR)/cmake
 BUILD_DIR = $(PROJECT_DIR)/build
-TESTS_DIR = $(PROJECT_DIR)/tests
+RUNTIME_DIR = $(PROJECT_DIR)/runtime
 
 # Build configuration
 BUILD_TYPE ?= Release

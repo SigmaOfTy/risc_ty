@@ -11,13 +11,12 @@ _start:
 
     la t0, _sbss
     la t1, _ebss
-
-    beq t0, t1, bss_clear_done
+    bgeu t0, t1, bss_clear_done
 
 bss_clear_loop: 
-    sb zero, 0(t0)
-    addi t0, t0, 1
-    bltu t0, t1, bss_clear_done 
+    sw zero, 0(t0)
+    addi t0, t0, 4
+    bltu t0, t1, bss_clear_loop
 
 bss_clear_done:
     jal ra, main

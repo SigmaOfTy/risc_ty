@@ -108,30 +108,6 @@ protected:
 
 private:
   std::unique_ptr<demu::difftest::IRefModel> ref_model_;
-
-  [[nodiscard]] auto check_state() -> bool {
-    bool match = true;
-    addr_t ref_pc = ref_model_->get_pc();
-    addr_t dut_pc = pc();
-
-    if (ref_pc != dut_pc) {
-      DEMU_ERROR("Difftest PC Mismatch! | DUT: 0x{:08x} | REF: 0x{:08x}",
-                 dut_pc, ref_pc);
-      match = false;
-    }
-
-    for (int i = 0; i < NUM_GPRS; i++) {
-      word_t ref_val = ref_model_->get_reg(i);
-      word_t dut_val = reg(i);
-      if (ref_val != dut_val) {
-        DEMU_ERROR(
-            "Difftest GPR[x{:02d}] Mismatch! | DUT: 0x{:08x} | REF: 0x{:08x}",
-            i, dut_val, ref_val);
-        match = false;
-      }
-    }
-    return match;
-  }
 };
 
 void print_usage(const char *prog) {
