@@ -9,7 +9,7 @@ set(RTL_DIR "${CMAKE_SOURCE_DIR}/../build")
 
 option(ENABLE_SIM "Enable simulator" ON)
 option(ENABLE_DBG "Enable debugger" ON)
-option(ENALBE_DIFFTEST "Enable difftest" ON)
+option(ENABLE_DIFF "Enable difftest" ON)
 
 # options
 set(NUM_THREADS 1)
