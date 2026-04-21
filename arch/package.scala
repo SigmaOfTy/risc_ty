@@ -50,7 +50,7 @@ package object configs {
   object BTBWays        extends Field[Int](4)
   object BTBSets        extends Field[Int](16)
   object BTBReplPolicy  extends Field[ReplacementPolicy](PseudoLRU)
-  object GShareGhrWidth extends Field[Int](10)
+  object GShareGhrWidth extends Field[Int](8)
 
   // Cache Parameters
   object L1ICacheWays       extends Field[Int](2)
