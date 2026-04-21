@@ -1,3 +1,6 @@
+// RUN: %bare_c
+// RUN: %difftest -c 5000
+
 int main() {
   int sum = 0;
   for (int i = 1; i <= 100; i++) {

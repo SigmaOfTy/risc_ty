@@ -52,6 +52,11 @@ clean:
 	@echo "==> Cleaning build directory..."
 	@rm -rf $(BUILD_DIR)
 
+# Run tests
+difftest:
+	@echo "==> Running difftests..."
+	@cd $(BUILD_DIR) && ninja check-difftest
+
 # Help message
 help:
 	@echo "Available targets:"
@@ -60,6 +65,7 @@ help:
 	@echo "  build            - Build the project"
 	@echo "  reconfigure      - Force reconfiguration of the project"
 	@echo "  clean            - Remove build directory"
+	@echo "  difftest         - Run difftests"
 	@echo "  help             - Show this help message"
 	@echo ""
 	@echo "Variables:"

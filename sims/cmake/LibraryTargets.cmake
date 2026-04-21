@@ -18,14 +18,14 @@ verilate(demu
     -Wno-DECLFILENAME
     -Wno-PINCONNECTEMPTY
     -j 0
-    --top-module ${ISA_TARGET}_system
+    --top-module ${TARGET_CPU}_system
     -CFLAGS "-Wno-unused-variable -Wno-bool-operation -Wno-parentheses-equality"
 
     --output-split 2000
     --output-split-cfuncs 2000
     --output-split-ctrace 2000
 
-  PREFIX V${ISA_TARGET}_system
+  PREFIX V${TARGET_CPU}_system
   TRACE_THREADS ${NUM_TRACE_THREADS}
   THREADS ${NUM_THREADS}
 )
