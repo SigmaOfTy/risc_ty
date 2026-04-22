@@ -63,7 +63,8 @@ class Lsu(implicit p: Parameters) extends Module {
     )
   )
 
-  val aligned_wdata = (raw_wdata << (byte_offset << 3))(p(XLen) - 1, 0)
+  val aligned_wdata    = (raw_wdata << (byte_offset << 3))(p(XLen) - 1, 0)
+  val aligned_bus_addr = Cat(addr(p(XLen) - 1, 2), "b00".U(2.W))
 
   val raw_wmask = MuxCase(
     "b1111".U(4.W),
@@ -90,14 +91,14 @@ class Lsu(implicit p: Parameters) extends Module {
 
   mem.req.valid     := en && !req_fired && pma_cacheable
   mem.req.bits.op   := Mux(mem_write, CacheOp.WRITE, CacheOp.READ)
-  mem.req.bits.addr := addr
+  mem.req.bits.addr := aligned_bus_addr
   mem.req.bits.data := aligned_wdata
   mem.req.bits.strb := wmask
   mem.resp.ready    := pma_cacheable
 
   mmio.req.valid     := en && !req_fired && !pma_cacheable
   mmio.req.bits.op   := Mux(mem_write, CacheOp.WRITE, CacheOp.READ)
-  mmio.req.bits.addr := addr
+  mmio.req.bits.addr := aligned_bus_addr
   mmio.req.bits.data := aligned_wdata
   mmio.req.bits.strb := wmask
   mmio.resp.ready    := !pma_cacheable
