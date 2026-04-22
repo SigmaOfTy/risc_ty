@@ -55,4 +55,3 @@ sta: pre
 		echo "Unsupported STA_TOOL: $(STA_TOOL)" ; \
 		exit 1 ; \
 	fi
-
