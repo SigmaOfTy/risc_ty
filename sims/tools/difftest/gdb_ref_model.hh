@@ -112,6 +112,10 @@ private:
   CPU_state state_{};
   bool no_ack_mode_ = false;
 
+  char recv_buf_[8192];
+  size_t recv_pos_ = 0;
+  size_t recv_len_ = 0;
+
   auto checksum(const std::string &data) -> std::string {
     byte_t csum = 0;
     for (char c : data) {
@@ -122,33 +126,49 @@ private:
     return buf;
   }
 
+  inline char read_char() {
+    if (recv_pos_ >= recv_len_) {
+      ssize_t bytes = recv(sock_, recv_buf_, sizeof(recv_buf_), 0);
+      if (bytes <= 0) {
+        DEMU_ERROR("QEMU GDB Socket closed or error.");
+        exit(1);
+      }
+      recv_pos_ = 0;
+      recv_len_ = static_cast<size_t>(bytes);
+    }
+    return recv_buf_[recv_pos_++];
+  }
+
   void send_packet(const std::string &data) {
     std::string packet = "$" + data + "#" + checksum(data);
     send(sock_, packet.c_str(), packet.length(), 0);
 
     if (!no_ack_mode_) {
-      char ack;
-      recv(sock_, &ack, 1, 0);
+      char ack = read_char();
+      if (ack != '+') {
+        DEMU_ERROR("GDB: Invalid ACK received: {}", ack);
+      }
     }
   }
 
   auto recv_packet() -> std::string {
     char c;
     std::string data;
-    while (recv(sock_, &c, 1, 0) == 1 && c != '$') {
-    }
-
     data.reserve(256);
 
-    while (recv(sock_, &c, 1, 0) == 1 && c != '#') {
+    while ((c = read_char()) != '$') {
+    }
+
+    while ((c = read_char()) != '#') {
       data += c;
     }
-    recv(sock_, &c, 1, 0);
-    recv(sock_, &c, 1, 0);
+
+    read_char();
+    read_char();
 
     if (!no_ack_mode_) {
       c = '+';
-      send(sock_, &c, 1, 0);
+      send(sock_, &c, 1, 0); // Only send ACK if mode is off
     }
     return data;
   }
