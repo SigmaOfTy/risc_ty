@@ -4,6 +4,7 @@
 #include "ref_model.hh"
 #include <arpa/inet.h>
 #include <iostream>
+#include <netinet/tcp.h>
 #include <sstream>
 #include <string>
 #include <sys/socket.h>
@@ -15,6 +16,10 @@ class GdbRefModel final : public IRefModel {
 public:
   explicit GdbRefModel(int port = 1234) {
     sock_ = socket(AF_INET, SOCK_STREAM, 0);
+
+    int flag = 1;
+    setsockopt(sock_, IPPROTO_TCP, TCP_NODELAY, (char *)&flag, sizeof(int));
+
     struct sockaddr_in serv_addr{};
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(port);
