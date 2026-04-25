@@ -10,7 +10,7 @@ public:
   ~AXIFullSlave() override = default;
 
   // AW
-  virtual void aw_valid(bool valid, uint32_t id, addr_t addr, uint8_t len,
+  virtual void aw_valid(bool valid, uint8_t id, addr_t addr, uint8_t len,
                         uint8_t size, uint8_t burst) {
     pin_awvalid = valid;
     pin_awid = id;
@@ -38,12 +38,12 @@ public:
   virtual auto b_resp() const noexcept -> uint8_t {
     return b_valid() ? _write_resp_queue.front().resp : 0;
   }
-  virtual auto b_id() const noexcept -> uint32_t {
+  virtual auto b_id() const noexcept -> uint8_t {
     return b_valid() ? _write_resp_queue.front().id : 0;
   }
 
   // AR
-  virtual void ar_valid(bool valid, uint32_t id, addr_t addr, uint8_t len,
+  virtual void ar_valid(bool valid, uint8_t id, addr_t addr, uint8_t len,
                         uint8_t size, uint8_t burst) {
     pin_arvalid = valid;
     pin_arid = id;
@@ -75,7 +75,7 @@ public:
 protected:
   // Cached Pin States
   bool pin_awvalid{false};
-  uint32_t pin_awid{0};
+  uint8_t pin_awid{0};
   addr_t pin_awaddr{0};
   uint8_t pin_awlen{0};
   uint8_t pin_awsize{0};
@@ -89,7 +89,7 @@ protected:
   bool pin_bready{false};
 
   bool pin_arvalid{false};
-  uint32_t pin_arid{0};
+  uint8_t pin_arid{0};
   addr_t pin_araddr{0};
   uint8_t pin_arlen{0};
   uint8_t pin_arsize{0};
@@ -98,7 +98,7 @@ protected:
   bool pin_rready{false};
 
   struct BurstTransaction {
-    uint32_t id;
+    uint8_t id;
     addr_t addr;
     uint8_t len;
     uint8_t size;
@@ -111,11 +111,11 @@ protected:
     bool last;
   };
   struct WriteResponse {
-    uint32_t id;
+    uint8_t id;
     uint8_t resp;
   };
   struct ReadData {
-    uint32_t id;
+    uint8_t id;
     word_t data;
     uint8_t resp;
     bool last;
