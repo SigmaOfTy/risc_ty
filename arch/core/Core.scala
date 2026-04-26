@@ -200,6 +200,8 @@ class RiscCore(implicit p: Parameters) extends Module {
   val is_store = Wire(Vec(p(IssueWidth), Bool()))
   val hazard   = Wire(Vec(p(IssueWidth), Bool()))
 
+  val reg_busy = RegInit(VecInit(Seq.fill(p(NumArchRegs))(false.B)))
+
   val stores_inflight = RegInit(0.U(log2Ceil(p(ROBSize) + 1).W))
 
   var csr_active   = !rob.io.empty
@@ -224,15 +226,29 @@ class RiscCore(implicit p: Parameters) extends Module {
     is_lsu(w)   := decoders(w).decoded.lsu
     is_store(w) := is_lsu(w) && !decoders(w).decoded.regwrite
 
-    val rs1_pend        = rob.io.rs1_bypass(w).pending
-    val rs2_pend        = rob.io.rs2_bypass(w).pending
-    val lsu_operand_haz = is_lsu(w) && (rs1_pend || (is_store(w) && rs2_pend))
+    val uses_rs1 =
+      regfile_utils.readable(rs1s(w)) &&
+        !decoders(w).decoded.csr
+
+    val uses_rs2 =
+      regfile_utils.readable(rs2s(w)) &&
+        (
+          is_store(w) ||
+            decoders(w).decoded.bru ||
+            decoders(w).decoded.mult ||
+            decoders(w).decoded.div
+        )
+
+    val rs1_raw_haz = uses_rs1 && reg_busy(rs1s(w))
+    val rs2_raw_haz = uses_rs2 && reg_busy(rs2s(w))
+
+    val operand_haz = rs1_raw_haz || rs2_raw_haz
 
     val csr_haz        = is_csr(w) && (csr_active || w.U > 0.U)
     val mem_order_haz  = is_lsu(w) && store_active
     val store_spec_haz = is_store(w) && (!rob.io.empty || w.U > 0.U)
 
-    hazard(w) := csr_haz || mem_order_haz || store_spec_haz || lsu_operand_haz
+    hazard(w) := csr_haz || mem_order_haz || store_spec_haz || operand_haz
 
     if (w > 0) {
       val next_csr = WireDefault(csr_active)
@@ -315,6 +331,25 @@ class RiscCore(implicit p: Parameters) extends Module {
   }
 
   ifu.dispatch_fire := ifu_fire
+
+  val reg_busy_next = Wire(Vec(p(NumArchRegs), Bool()))
+  reg_busy_next := reg_busy
+
+  for (w <- 0 until p(IssueWidth))
+    when(rob.io.commit(w).pop && regfile_utils.writable(rob.io.commit(w).rd)) {
+      reg_busy_next(rob.io.commit(w).rd) := false.B
+    }
+
+  for (w <- 0 until p(IssueWidth))
+    when(lane_valid(w) && decoders(w).decoded.regwrite && regfile_utils.writable(rds(w))) {
+      reg_busy_next(rds(w)) := true.B
+    }
+
+  when(global_flush) {
+    reg_busy := VecInit(Seq.fill(p(NumArchRegs))(false.B))
+  }.otherwise {
+    reg_busy := reg_busy_next
+  }
 
   val commit_is_store       = Wire(Vec(p(IssueWidth), Bool()))
   val commit_is_cond_branch = Wire(Vec(p(IssueWidth), Bool()))
@@ -450,8 +485,8 @@ class RiscCore(implicit p: Parameters) extends Module {
         rob.io.wb(i).actual_taken  := b.actual_taken
         rob.io.wb(i).actual_target := b.actual_target
       case c: CsrFU =>
-        rob.io.wb(i).trap_req     := c.trap_request
-        rob.io.wb(i).trap_target  := c.trap_target
+        rob.io.wb(i).trap_req     := async_trap_req
+        rob.io.wb(i).trap_target  := async_trap_tgt
         rob.io.wb(i).trap_ret     := c.trap_ret
         rob.io.wb(i).trap_ret_tgt := c.trap_ret_tgt
       case _        =>
