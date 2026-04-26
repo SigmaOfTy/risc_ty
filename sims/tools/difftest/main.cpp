@@ -247,7 +247,7 @@ void print_usage(const char *prog) {
   std::cout << "  -t, --trace                   Enable VCD trace\n";
   std::cout << "  -T, --threads <n>             Number of Verilator threads "
                "(default: NUM_THREADS)\n";
-  std::cout << "  --safe-loop-terminate               Safe return when "
+  std::cout << "  -SLT, --safe-loop-terminate               Safe return when "
                "stucking at infinite loop (default: false)\n";
   std::cout
       << "  -c, --cycles <n>              Run for n cycles (0=unlimited)\n";
@@ -303,7 +303,7 @@ auto main(int argc, char **argv) -> int {
       if (i + 1 < argc) {
         threads = std::stoi(argv[++i]);
       }
-    } else if (arg == "--safe-loop-terminate") {
+    } else if (arg == "-SLT" || arg == "--safe-loop-terminate") {
       safe_loop_terminate = true;
     } else if (arg == "-d" || arg == "--dump-regs") {
       dump_regs = true;

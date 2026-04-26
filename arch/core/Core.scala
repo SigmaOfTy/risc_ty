@@ -17,7 +17,7 @@ import arch.configs._
 import arch.configs.proto.FunctionalUnitType._
 import vopts.mem.cache._
 import chisel3._
-import chisel3.util.{ log2Ceil, MuxCase, Mux1H, PopCount, RRArbiter, Queue }
+import chisel3.util.{ log2Ceil, MuxCase, Mux1H, PopCount }
 
 class RiscCore(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_cpu"
