@@ -1,5 +1,7 @@
 #pragma once
 
+#include <queue>
+
 #include "../../device.hh"
 
 namespace demu::hal::axil {
