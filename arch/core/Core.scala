@@ -54,7 +54,7 @@ class RiscCore(implicit p: Parameters) extends Module {
     new SetAssociativeStreamingCache(
       UInt(p(XLen).W),
       p(XLen),
-      p(L1DCacheLineSize) / (p(XLen) / 8),
+      p(L1DCacheLineSize) / p(BytesPerWord),
       p(L1DCacheSets),
       p(L1DCacheWays),
       p(L1DCacheReplPolicy)
@@ -212,7 +212,7 @@ class RiscCore(implicit p: Parameters) extends Module {
         (
           ifu.if_valid(w - 1) &&
             ifu.if_bpu_pred_taken(w - 1) &&
-            ifu.if_pc(w) === (ifu.if_pc(w - 1) + p(IAlign).U)
+            ifu.if_pc(w) === (ifu.if_pc(w - 1) + p(PCStep).U)
         )
 
   // Store-buffer allocation capacity

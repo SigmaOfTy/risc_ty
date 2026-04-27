@@ -6,7 +6,7 @@ package object configs {
   import proto.FunctionalUnitType._
   import isa._
   import vopts.mem.cache._
-  import chisel3.util.BitPat
+  import chisel3.util.{ BitPat, log2Ceil }
 
   // NOTE: User Options: You should only modify these parameters
 
@@ -82,14 +82,16 @@ package object configs {
   // --------------------------------------------
 
   // NOTE: You should not modify the parameters below, as they are derived from the user options above
-  // Derived Parameters
+  // Architecture Parameters
   object XLen         extends Field[Int](ISA().xlen)
   object ILen         extends Field[Int](ISA().ilen)
-  object IAlign       extends Field[Int](ISA().iAlign)
   object NumArchRegs  extends Field[Int](ISA().numArchRegs)
   object IsBigEndian  extends Field[Boolean](ISA().isBigEndian)
   object MicroOpWidth extends Field[Int](ISA().microOpWidth)
   object Bubble       extends Field[BitPat](ISA().bubble)
+  object BytesPerWord extends Field[Int](ISA().xlen / 8)
+  object PCStep       extends Field[Int](ISA().ilen / 8)
+  object PCAlign      extends Field[Int](log2Ceil(ISA().ilen / 8))
 
   implicit val p: Parameters = Parameters.empty ++ Map(
     ISA       -> ISA(),
@@ -98,11 +100,13 @@ package object configs {
     // ISA
     XLen         -> XLen(),
     ILen         -> ILen(),
-    IAlign       -> IAlign(),
     NumArchRegs  -> NumArchRegs(),
     IsBigEndian  -> IsBigEndian(),
     MicroOpWidth -> MicroOpWidth(),
     Bubble       -> Bubble(),
+    BytesPerWord -> BytesPerWord(),
+    PCStep       -> PCStep(),
+    PCAlign      -> PCAlign(),
 
     // IFU
     IBufferSize -> IBufferSize(),
