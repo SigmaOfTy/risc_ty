@@ -2,47 +2,35 @@ package arch.core.lsu
 
 import arch.configs._
 import chisel3._
-import chisel3.util.{ Cat, Fill, MuxCase, log2Ceil }
+import chisel3.util.{ Cat, Fill, MuxCase }
 
 trait MemoryDataHelpers extends Utils {
-  def bytes(implicit p: Parameters): Int = p(XLen) / 8
-
-  def byteOffsetWidth(implicit p: Parameters): Int =
-    log2Ceil(bytes)
-
-  def alignedAddr(addr: UInt)(implicit p: Parameters): UInt = {
-    val offW = byteOffsetWidth
-    Cat(addr(p(XLen) - 1, offW), 0.U(offW.W))
-  }
+  def alignedAddr(addr: UInt)(implicit p: Parameters): UInt =
+    Cat(addr(p(XLen) - 1, p(BytesOffsetWidth)), 0.U(p(BytesOffsetWidth).W))
 
   def byteOffset(addr: UInt)(implicit p: Parameters): UInt =
-    addr(byteOffsetWidth - 1, 0)
+    addr(p(BytesOffsetWidth) - 1, 0)
 
   def expandByteMask(mask: UInt)(implicit p: Parameters): UInt =
-    Cat((bytes - 1 to 0 by -1).map(i => Fill(8, mask(i))))
+    Cat((p(BytesPerWord) - 1 to 0 by -1).map(i => Fill(8, mask(i))))
 }
 
 trait LoadUtils extends MemoryDataHelpers {
   def decodeLoad(uop: UInt): LoadCtrl
 
-  def rawLoadMask(ctrl: LoadCtrl)(implicit p: Parameters): UInt = {
-    val n = bytes
-
+  def rawLoadMask(ctrl: LoadCtrl)(implicit p: Parameters): UInt =
     MuxCase(
-      Fill(n, 1.U(1.W)).asUInt,
+      Fill(p(BytesPerWord), 1.U(1.W)).asUInt,
       Seq(
-        ctrl.is_byte  -> "b0001".U(n.W),
-        ctrl.is_half  -> "b0011".U(n.W),
-        ctrl.is_word  -> "b1111".U(n.W),
-        ctrl.is_dword -> Fill(n, 1.U(1.W)).asUInt
+        ctrl.is_byte  -> "b0001".U(p(BytesPerWord).W),
+        ctrl.is_half  -> "b0011".U(p(BytesPerWord).W),
+        ctrl.is_word  -> "b1111".U(p(BytesPerWord).W),
+        ctrl.is_dword -> Fill(p(BytesPerWord), 1.U(1.W)).asUInt
       )
     )
-  }
 
-  def shiftedLoadMask(ctrl: LoadCtrl, addr: UInt)(implicit p: Parameters): UInt = {
-    val n = bytes
-    (rawLoadMask(ctrl) << byteOffset(addr))(n - 1, 0)
-  }
+  def shiftedLoadMask(ctrl: LoadCtrl, addr: UInt)(implicit p: Parameters): UInt =
+    (rawLoadMask(ctrl) << byteOffset(addr))(p(BytesPerWord) - 1, 0)
 
   def loadResult(ctrl: LoadCtrl, addr: UInt, alignedData: UInt)(implicit p: Parameters): UInt = {
     val shifted = alignedData >> (byteOffset(addr) << 3)
@@ -73,24 +61,19 @@ trait LoadUtils extends MemoryDataHelpers {
 trait StoreUtils extends MemoryDataHelpers {
   def decodeStore(uop: UInt): StoreCtrl
 
-  def rawStoreMask(ctrl: StoreCtrl)(implicit p: Parameters): UInt = {
-    val n = bytes
-
+  def rawStoreMask(ctrl: StoreCtrl)(implicit p: Parameters): UInt =
     MuxCase(
-      Fill(n, 1.U(1.W)).asUInt,
+      Fill(p(BytesPerWord), 1.U(1.W)).asUInt,
       Seq(
-        ctrl.is_byte  -> "b0001".U(n.W),
-        ctrl.is_half  -> "b0011".U(n.W),
-        ctrl.is_word  -> "b1111".U(n.W),
-        ctrl.is_dword -> Fill(n, 1.U(1.W)).asUInt
+        ctrl.is_byte  -> "b0001".U(p(BytesPerWord).W),
+        ctrl.is_half  -> "b0011".U(p(BytesPerWord).W),
+        ctrl.is_word  -> "b1111".U(p(BytesPerWord).W),
+        ctrl.is_dword -> Fill(p(BytesPerWord), 1.U(1.W)).asUInt
       )
     )
-  }
 
-  def shiftedStoreMask(ctrl: StoreCtrl, addr: UInt)(implicit p: Parameters): UInt = {
-    val n = bytes
-    (rawStoreMask(ctrl) << byteOffset(addr))(n - 1, 0)
-  }
+  def shiftedStoreMask(ctrl: StoreCtrl, addr: UInt)(implicit p: Parameters): UInt =
+    (rawStoreMask(ctrl) << byteOffset(addr))(p(BytesPerWord) - 1, 0)
 
   def narrowStoreData(ctrl: StoreCtrl, data: UInt)(implicit p: Parameters): UInt =
     MuxCase(
@@ -112,8 +95,8 @@ trait StoreUtils extends MemoryDataHelpers {
   }
 }
 
-object LoadUtilsFactory  extends UtilsFactory[LoadUtils]("LOAD")
-object StoreUtilsFactory extends UtilsFactory[StoreUtils]("STORE")
+object LoadUtilsFactory  extends UtilsFactory[LoadUtils]("Load")
+object StoreUtilsFactory extends UtilsFactory[StoreUtils]("Store")
 
 object LoadStoreInit {
   val rv32iLoadUtils   = riscv.RV32ILoadUtils

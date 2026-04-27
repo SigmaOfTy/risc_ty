@@ -83,30 +83,34 @@ package object configs {
 
   // NOTE: You should not modify the parameters below, as they are derived from the user options above
   // Architecture Parameters
-  object XLen         extends Field[Int](ISA().xlen)
-  object ILen         extends Field[Int](ISA().ilen)
-  object NumArchRegs  extends Field[Int](ISA().numArchRegs)
-  object IsBigEndian  extends Field[Boolean](ISA().isBigEndian)
-  object MicroOpWidth extends Field[Int](ISA().microOpWidth)
-  object Bubble       extends Field[BitPat](ISA().bubble)
-  object BytesPerWord extends Field[Int](ISA().xlen / 8)
-  object PCStep       extends Field[Int](ISA().ilen / 8)
-  object PCAlign      extends Field[Int](log2Ceil(ISA().ilen / 8))
+  object XLen             extends Field[Int](ISA().xlen)
+  object ILen             extends Field[Int](ISA().ilen)
+  object NumArchRegs      extends Field[Int](ISA().numArchRegs)
+  object IsBigEndian      extends Field[Boolean](ISA().isBigEndian)
+  object MicroOpWidth     extends Field[Int](ISA().microOpWidth)
+  object Bubble           extends Field[BitPat](ISA().bubble)
+  object BytesPerWord     extends Field[Int](ISA().xlen / 8)
+  object BytesOffsetWidth extends Field[Int](log2Ceil(ISA().xlen / 8))
+  object BytesPerInstr    extends Field[Int](ISA().ilen / 8)
+  object PCStep           extends Field[Int](ISA().ilen / 8)
+  object PCAlign          extends Field[Int](log2Ceil(ISA().ilen / 8))
 
   implicit val p: Parameters = Parameters.empty ++ Map(
     ISA       -> ISA(),
     Frequency -> Frequency(),
 
     // ISA
-    XLen         -> XLen(),
-    ILen         -> ILen(),
-    NumArchRegs  -> NumArchRegs(),
-    IsBigEndian  -> IsBigEndian(),
-    MicroOpWidth -> MicroOpWidth(),
-    Bubble       -> Bubble(),
-    BytesPerWord -> BytesPerWord(),
-    PCStep       -> PCStep(),
-    PCAlign      -> PCAlign(),
+    XLen             -> XLen(),
+    ILen             -> ILen(),
+    NumArchRegs      -> NumArchRegs(),
+    IsBigEndian      -> IsBigEndian(),
+    MicroOpWidth     -> MicroOpWidth(),
+    Bubble           -> Bubble(),
+    BytesPerWord     -> BytesPerWord(),
+    BytesOffsetWidth -> BytesOffsetWidth(),
+    BytesPerInstr    -> BytesPerInstr(),
+    PCStep           -> PCStep(),
+    PCAlign          -> PCAlign(),
 
     // IFU
     IBufferSize -> IBufferSize(),

@@ -16,7 +16,7 @@ class StoreCtrl(implicit p: Parameters) extends Bundle {
   val is_half  = Bool()
   val is_word  = Bool()
   val is_dword = Bool()
-  val strb     = UInt((p(XLen) / 8).W)
+  val strb     = UInt(p(BytesPerWord).W)
 }
 
 class StoreFU(implicit p: Parameters) extends FunctionalUnit {

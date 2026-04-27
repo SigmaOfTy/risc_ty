@@ -43,7 +43,7 @@ class RiscCore(implicit p: Parameters) extends Module {
     new SetAssociativeStreamingCacheReadOnly(
       Vec(p(IssueWidth), UInt(p(ILen).W)),
       p(XLen),
-      p(L1ICacheLineSize) / (p(IssueWidth) * (p(ILen) / 8)),
+      p(L1ICacheLineSize) / (p(IssueWidth) * (p(BytesPerInstr))),
       p(L1ICacheSets),
       p(L1ICacheWays),
       p(L1ICacheReplPolicy)
@@ -135,10 +135,10 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   // BPU query / frontend redirect
   val bpuQueryBase =
-    ifu.fetch_pc & ~(p(IssueWidth) * (p(ILen) / 8) - 1).U(p(XLen).W)
+    ifu.fetch_pc & ~(p(IssueWidth) * p(BytesPerInstr) - 1).U(p(XLen).W)
 
   for (w <- 0 until p(IssueWidth))
-    bpu.query_pc(w) := bpuQueryBase + (w * (p(ILen) / 8)).U
+    bpu.query_pc(w) := bpuQueryBase + (w * p(PCStep)).U
 
   bpu.advance_valid       := ifu.fetch_fire
   bpu.flush               := global_flush

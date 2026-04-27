@@ -8,10 +8,9 @@ import chisel3.util.{ BitPat, MuxLookup }
 // uop[7:4] = unused | uop[3] = is_load | uop[2] = is_unsigned | uop[1:0] = size
 trait RV32IMemUOpConsts {
   private def cat(bps: BitPat*): BitPat = bps.reduce(_ ## _)
-
-  private def N   = BitPat("b0")
-  private def Y   = BitPat("b1")
-  private def P_X = BitPat("b????")
+  private def N                         = BitPat("b0")
+  private def Y                         = BitPat("b1")
+  private def P_X                       = BitPat("b????")
 
   def MEM_X  = BitPat("b??")
   def SZ_MEM = MEM_X.getWidth

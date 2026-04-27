@@ -18,7 +18,7 @@ class LoadCtrl(implicit p: Parameters) extends Bundle {
   val is_word     = Bool()
   val is_dword    = Bool()
   val is_unsigned = Bool()
-  val strb        = UInt((p(XLen) / 8).W)
+  val strb        = UInt(p(BytesPerWord).W)
 }
 
 class LoadFU(implicit p: Parameters) extends FunctionalUnit {
@@ -38,7 +38,7 @@ class LoadFU(implicit p: Parameters) extends FunctionalUnit {
   val resultReg = RegInit(0.U(p(XLen).W))
 
   val fwdDataReg = RegInit(0.U(p(XLen).W))
-  val fwdMaskReg = RegInit(0.U((p(XLen) / 8).W))
+  val fwdMaskReg = RegInit(0.U(p(BytesPerWord).W))
 
   val reqOutstanding = RegInit(false.B)
   val reqWasCache    = RegInit(false.B)

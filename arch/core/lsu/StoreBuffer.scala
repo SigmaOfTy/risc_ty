@@ -16,7 +16,7 @@ class StoreWriteBundle(implicit p: Parameters) extends Bundle {
   val rob_tag   = UInt(log2Ceil(p(ROBSize)).W)
   val addr      = UInt(p(XLen).W)
   val data      = UInt(p(XLen).W)
-  val mask      = UInt((p(XLen) / 8).W)
+  val mask      = UInt(p(BytesPerWord).W)
   val cacheable = Bool()
 }
 
@@ -24,7 +24,7 @@ class StoreForwardReq(implicit p: Parameters) extends Bundle {
   val valid  = Bool()
   val sq_seq = UInt(64.W)
   val addr   = UInt(p(XLen).W)
-  val mask   = UInt((p(XLen) / 8).W)
+  val mask   = UInt(p(BytesPerWord).W)
 }
 
 class StoreForwardResp(implicit p: Parameters) extends Bundle {
@@ -34,7 +34,7 @@ class StoreForwardResp(implicit p: Parameters) extends Bundle {
   val fwdValid = Bool()
   val fwdFull  = Bool()
   val fwdData  = UInt(p(XLen).W)
-  val fwdMask  = UInt((p(XLen) / 8).W)
+  val fwdMask  = UInt(p(BytesPerWord).W)
 }
 
 class StoreForwardPort(implicit p: Parameters) extends Bundle {
@@ -53,16 +53,15 @@ class StoreBufferEntry(implicit p: Parameters) extends Bundle {
   val rob_tag   = UInt(log2Ceil(p(ROBSize)).W)
   val addr      = UInt(p(XLen).W)
   val data      = UInt(p(XLen).W)
-  val mask      = UInt((p(XLen) / 8).W)
+  val mask      = UInt(p(BytesPerWord).W)
   val cacheable = Bool()
 }
 
 class StoreBuffer(numLoadPorts: Int, numStorePorts: Int)(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_store_buffer"
 
-  private val IdxW  = log2Ceil(p(StoreBufferSize))
-  private val CntW  = log2Ceil(p(StoreBufferSize) + 1)
-  private val Bytes = p(XLen) / 8
+  private val IdxW = log2Ceil(p(StoreBufferSize))
+  private val CntW = log2Ceil(p(StoreBufferSize) + 1)
 
   val io = IO(new Bundle {
     val alloc  = Flipped(Vec(p(IssueWidth), Valid(new StoreAllocBundle)))
@@ -110,9 +109,9 @@ class StoreBuffer(numLoadPorts: Int, numStorePorts: Int)(implicit p: Parameters)
   for (q <- 0 until numLoadPorts) {
     val req = io.fwd(q).req
 
-    val dataStage = Wire(Vec(p(StoreBufferSize) + 1, Vec(Bytes, UInt(8.W))))
-    val maskStage = Wire(Vec(p(StoreBufferSize) + 1, Vec(Bytes, Bool())))
-    val seqStage  = Wire(Vec(p(StoreBufferSize) + 1, Vec(Bytes, UInt(64.W))))
+    val dataStage = Wire(Vec(p(StoreBufferSize) + 1, Vec(p(BytesPerWord), UInt(8.W))))
+    val maskStage = Wire(Vec(p(StoreBufferSize) + 1, Vec(p(BytesPerWord), Bool())))
+    val seqStage  = Wire(Vec(p(StoreBufferSize) + 1, Vec(p(BytesPerWord), UInt(64.W))))
 
     val blockStage     = Wire(Vec(p(StoreBufferSize) + 1, Bool()))
     val liveOlderStage = Wire(Vec(p(StoreBufferSize) + 1, Bool()))
@@ -120,7 +119,7 @@ class StoreBuffer(numLoadPorts: Int, numStorePorts: Int)(implicit p: Parameters)
     blockStage(0)     := false.B
     liveOlderStage(0) := false.B
 
-    for (b <- 0 until Bytes) {
+    for (b <- 0 until p(BytesPerWord)) {
       dataStage(0)(b) := 0.U
       maskStage(0)(b) := false.B
       seqStage(0)(b)  := 0.U
@@ -154,7 +153,7 @@ class StoreBuffer(numLoadPorts: Int, numStorePorts: Int)(implicit p: Parameters)
       liveOlderStage(i + 1) :=
         liveOlderStage(i) || olderLive
 
-      for (b <- 0 until Bytes) {
+      for (b <- 0 until p(BytesPerWord)) {
         val byteHit =
           sameLine &&
             e.mask(b) &&
@@ -175,7 +174,7 @@ class StoreBuffer(numLoadPorts: Int, numStorePorts: Int)(implicit p: Parameters)
     io.fwd(q).resp.hasOlder := liveOlderStage(p(StoreBufferSize))
     io.fwd(q).resp.fwdValid := (finalMaskUInt & req.mask).orR
     io.fwd(q).resp.fwdFull  := ((finalMaskUInt & req.mask) === req.mask)
-    io.fwd(q).resp.fwdData  := Cat((Bytes - 1 to 0 by -1).map(i => finalDataVec(i)))
+    io.fwd(q).resp.fwdData  := Cat((p(BytesPerWord) - 1 to 0 by -1).map(i => finalDataVec(i)))
     io.fwd(q).resp.fwdMask  := finalMaskUInt
   }
 
