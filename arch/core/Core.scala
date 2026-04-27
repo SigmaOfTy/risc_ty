@@ -43,7 +43,7 @@ class RiscCore(implicit p: Parameters) extends Module {
     new SetAssociativeStreamingCacheReadOnly(
       Vec(p(IssueWidth), UInt(p(ILen).W)),
       p(XLen),
-      p(L1ICacheLineSize) / (p(IssueWidth) * (p(BytesPerInstr))),
+      p(L1ICacheLineSize) / (p(IssueWidth) * p(BytesPerInstr)),
       p(L1ICacheSets),
       p(L1ICacheWays),
       p(L1ICacheReplPolicy)
@@ -86,34 +86,25 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   val store_buffer = Module(new StoreBuffer(ldus.size, stus.size))
 
-  // Commit redirect / global flush
   val is_flush = Wire(Vec(p(IssueWidth), Bool()))
-  for (w <- 0 until p(IssueWidth))
-    is_flush(w) := rob.io.commit(w).pop && rob.io.commit(w).flush_pipeline
+  for (w <- 0 until p(IssueWidth)) is_flush(w) := rob.io.commit(w).pop && rob.io.commit(w).flush_pipeline
 
   val commit_flush_pipeline = is_flush.reduce(_ || _)
   val commit_flush_target   = Mux1H(is_flush.zipWithIndex.map { case (f, w) => f -> rob.io.commit(w).flush_target })
 
-  val async_trap_req =
-    if (csrs.nonEmpty) csrs.map(c => c.trap_request && !c.is_busy).foldLeft(false.B)(_ || _)
-    else false.B
-
-  val async_trap_tgt =
-    if (csrs.nonEmpty) Mux1H(csrs.map(c => (c.trap_request && !c.is_busy) -> c.trap_target))
-    else 0.U(p(XLen).W)
+  val async_trap_req = if (csrs.nonEmpty) csrs.map(c => c.trap_request && !c.is_busy).foldLeft(false.B)(_ || _) else false.B
+  val async_trap_tgt = if (csrs.nonEmpty) Mux1H(csrs.map(c => (c.trap_request && !c.is_busy) -> c.trap_target)) else 0.U(p(XLen).W)
 
   val global_flush = commit_flush_pipeline || async_trap_req
   val redirect_pc  = Mux(async_trap_req, async_trap_tgt, commit_flush_target)
 
-  // Memory path
   for (i <- ldus.indices) {
     memory_arbiter.ld_mem(i) <> ldus(i).mem
     memory_arbiter.ld_mmio(i) <> ldus(i).mmio
     ldus(i).sbFwd <> store_buffer.io.fwd(i)
   }
 
-  for (i <- stus.indices)
-    store_buffer.io.write(i) := stus(i).sbWrite
+  for (i <- stus.indices) store_buffer.io.write(i) := stus(i).sbWrite
 
   memory_arbiter.store_mem <> store_buffer.io.mem
   memory_arbiter.store_mmio <> store_buffer.io.mmio
@@ -127,16 +118,13 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   store_buffer.io.flush := global_flush
 
-  // CSR architectural PC
   csrs.foreach { csr =>
     csr.arch_pc := Mux(rob.io.empty, ifu.if_pc(0), rob.io.commit(0).pc)
   }
 
-  // BPU query / frontend redirect
   val bpuQueryBase = ifu.fetch_pc & ~(p(IssueWidth) * p(BytesPerInstr) - 1).U(p(XLen).W)
 
-  for (w <- 0 until p(IssueWidth))
-    bpu.query_pc(w) := bpuQueryBase + (w * p(PCStep)).U
+  for (w <- 0 until p(IssueWidth)) bpu.query_pc(w) := bpuQueryBase + (w * p(PCStep)).U
 
   bpu.advance_valid       := ifu.fetch_fire
   bpu.flush               := global_flush
@@ -152,7 +140,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   ifu.bru_not_taken := false.B
   ifu.bru_branch_pc := 0.U
 
-  // Decode / register read
   val rs1s = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(NumArchRegs)).W)))
   val rs2s = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(NumArchRegs)).W)))
   val rds  = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(NumArchRegs)).W)))
@@ -183,9 +170,7 @@ class RiscCore(implicit p: Parameters) extends Module {
     is_store(w) := decoders(w).decoded.store
     is_mem(w)   := decoders(w).decoded.load || decoders(w).decoded.store
 
-    decoded_rd_valid(w) :=
-      decoders(w).decoded.rd_valid &&
-        regfile_utils.writable(rds(w))
+    decoded_rd_valid(w) := decoders(w).decoded.rd_valid && regfile_utils.writable(rds(w))
 
     inst_type(w) := MuxCase(
       FUNCTIONAL_UNIT_TYPE_ALU.index.U(FuTypeW.W),
@@ -200,21 +185,14 @@ class RiscCore(implicit p: Parameters) extends Module {
     )
   }
 
-  // Kill mask for predicted-taken branch inside fetch packet
   val kill_mask = Wire(Vec(p(IssueWidth), Bool()))
   kill_mask(0) := false.B
 
-  for (w <- 1 until p(IssueWidth))
-    kill_mask(w) := kill_mask(w - 1) || (ifu.if_valid(w - 1) && ifu.if_bpu_pred_taken(w - 1) && ifu.if_pc(w) === (ifu.if_pc(w - 1) + p(PCStep).U))
+  for (w <- 1 until p(IssueWidth)) kill_mask(w) := kill_mask(w - 1) || (ifu.if_valid(w - 1) && ifu.if_bpu_pred_taken(w - 1) && ifu.if_pc(w) === ifu.if_pc(w - 1) + p(PCStep).U)
 
-  // Store-buffer allocation capacity
-  val possibleStoreBeforeOrAt =
-    Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(IssueWidth) + 1).W)))
+  val possibleStoreBeforeOrAt = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(IssueWidth) + 1).W)))
 
-  for (w <- 0 until p(IssueWidth))
-    possibleStoreBeforeOrAt(w) := PopCount((0 to w).map { v =>
-      ifu.if_valid(v) && decoders(v).decoded.store && !kill_mask(v) && !global_flush
-    })
+  for (w <- 0 until p(IssueWidth)) possibleStoreBeforeOrAt(w) := PopCount((0 to w).map(v => ifu.if_valid(v) && decoders(v).decoded.store && !kill_mask(v) && !global_flush))
 
   val lane_base_req_ok = Wire(Vec(p(IssueWidth), Bool()))
   val lane_prefix_ok   = Wire(Vec(p(IssueWidth), Bool()))
@@ -233,14 +211,11 @@ class RiscCore(implicit p: Parameters) extends Module {
     lane_prefix_ok(w) := lane_prefix_ok(w - 1) && (olderLaneMayBeSkipped || olderLaneCanBePresented)
   }
 
-  for (w <- 0 until p(IssueWidth))
-    core_valid_req(w) := lane_base_req_ok(w) && lane_prefix_ok(w)
+  for (w <- 0 until p(IssueWidth)) core_valid_req(w) := lane_base_req_ok(w) && lane_prefix_ok(w)
 
-  // Scheduler dispatch handshake
   val lane_valid = Wire(Vec(p(IssueWidth), Bool()))
   val ifu_fire   = Wire(Vec(p(IssueWidth), Bool()))
 
-  // Store queue index/sequence allocation
   private def sqWrapAdd(x: UInt, y: UInt): UInt = {
     val idxW = log2Ceil(p(StoreBufferSize))
     val sum  = x +& y
@@ -249,7 +224,6 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   val sq_idx_for_lane = Wire(Vec(p(IssueWidth), UInt(log2Ceil(p(StoreBufferSize)).W)))
   val sq_tail_after   = Wire(Vec(p(IssueWidth) + 1, UInt(log2Ceil(p(StoreBufferSize)).W)))
-
   val sq_seq_for_lane = Wire(Vec(p(IssueWidth), UInt(64.W)))
   val sq_seq_after    = Wire(Vec(p(IssueWidth) + 1, UInt(64.W)))
 
@@ -273,13 +247,11 @@ class RiscCore(implicit p: Parameters) extends Module {
     store_buffer.io.alloc(w).bits.rob_tag := rob.io.enq(w).rob_tag
   }
 
-  // ROB commit -> StoreBuffer commit
   for (w <- 0 until p(IssueWidth)) {
     store_buffer.io.commit(w).valid := rob.io.commit(w).pop && rob.io.commit(w).is_store
     store_buffer.io.commit(w).bits  := rob.io.commit(w).sq_idx
   }
 
-  // Commit bypass into newly dispatched operands
   val rs1_commit_match = Wire(Vec(p(IssueWidth), Bool()))
   val rs2_commit_match = Wire(Vec(p(IssueWidth), Bool()))
   val rs1_commit_data  = Wire(Vec(p(IssueWidth), UInt(p(XLen).W)))
@@ -287,15 +259,14 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   for (w <- 0 until p(IssueWidth)) {
     val match1 = (0 until p(IssueWidth)).map(cw => rob.io.commit(cw).pop && rob.io.commit(cw).rd === rs1s(w) && rs1s(w) =/= 0.U)
-    rs1_commit_match(w) := match1.reduce(_ || _)
-    rs1_commit_data(w)  := Mux1H(match1, rob.io.commit.map(_.data))
-
     val match2 = (0 until p(IssueWidth)).map(cw => rob.io.commit(cw).pop && rob.io.commit(cw).rd === rs2s(w) && rs2s(w) =/= 0.U)
+
+    rs1_commit_match(w) := match1.reduce(_ || _)
     rs2_commit_match(w) := match2.reduce(_ || _)
+    rs1_commit_data(w)  := Mux1H(match1, rob.io.commit.map(_.data))
     rs2_commit_data(w)  := Mux1H(match2, rob.io.commit.map(_.data))
   }
 
-  // Drive scheduler dispatch payloads
   for (w <- 0 until p(IssueWidth)) {
     val rs1_bypassed       = Mux(rob.io.rs1_bypass(w).valid, rob.io.rs1_bypass(w).data, regfile.rs1_data(w))
     val rs2_bypassed       = Mux(rob.io.rs2_bypass(w).valid, rob.io.rs2_bypass(w).data, regfile.rs2_data(w))
@@ -303,6 +274,7 @@ class RiscCore(implicit p: Parameters) extends Module {
     val rs2_fully_bypassed = Mux(rs2_commit_match(w), rs2_commit_data(w), rs2_bypassed)
 
     val dis = scheduler.dis_reqs(w)
+
     dis.valid          := core_valid_req(w)
     dis.bits.pc        := ifu.if_pc(w)
     dis.bits.instr     := ifu.if_instr(w)
@@ -321,10 +293,10 @@ class RiscCore(implicit p: Parameters) extends Module {
     dis.bits.rob_tag   := rob.io.enq(w).rob_tag
     dis.bits.sq_idx    := sq_idx_for_lane(w)
     dis.bits.sq_seq    := sq_seq_for_lane(w)
-    lane_valid(w)      := dis.fire
+
+    lane_valid(w) := dis.fire
   }
 
-  // ROB enqueue follows scheduler acceptance
   for (w <- 0 until p(IssueWidth)) {
     rob.io.enq(w).valid            := lane_valid(w)
     rob.io.enq(w).pc               := ifu.if_pc(w)
@@ -342,7 +314,6 @@ class RiscCore(implicit p: Parameters) extends Module {
     rob.io.enq(w).sq_idx           := sq_idx_for_lane(w)
   }
 
-  // IFU consumption
   for (w <- 0 until p(IssueWidth)) {
     val consumeThisLane = global_flush || kill_mask(w) || lane_valid(w)
 
@@ -355,24 +326,20 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   ifu.dispatch_fire := ifu_fire
 
-  // Scheduler / ROB flush
   scheduler.flush := global_flush
   rob.io.flush    := global_flush
 
-  // FU connections
   for ((fu, i) <- fus.zipWithIndex) {
-    fu.io.flush := global_flush
-
+    fu.io.flush      := global_flush
     fu.io.req <> scheduler.fu_reqs(i)
     fu.io.resp.ready := true.B
 
     scheduler.fu_done(i).valid := fu.io.resp.valid
     scheduler.fu_done(i).bits  := fu.io.resp.bits
 
-    rob.io.wb(i).valid   := fu.io.resp.valid
-    rob.io.wb(i).rob_tag := fu.io.resp.bits.rob_tag
-    rob.io.wb(i).data    := fu.io.resp.bits.result
-
+    rob.io.wb(i).valid         := fu.io.resp.valid
+    rob.io.wb(i).rob_tag       := fu.io.resp.bits.rob_tag
+    rob.io.wb(i).data          := fu.io.resp.bits.result
     rob.io.wb(i).is_bru        := false.B
     rob.io.wb(i).actual_taken  := false.B
     rob.io.wb(i).actual_target := 0.U
@@ -397,17 +364,14 @@ class RiscCore(implicit p: Parameters) extends Module {
     }
   }
 
-  // Register commit
   for (w <- 0 until p(IssueWidth)) {
     rob.io.read_rob_tag(w) := 0.U
     rob.io.commit(w).pop   := rob.io.commit(w).valid
-
-    regfile.write_en(w)   := rob.io.commit(w).pop && regfile_utils.writable(rob.io.commit(w).rd)
-    regfile.write_preg(w) := rob.io.commit(w).rd
-    regfile.write_data(w) := rob.io.commit(w).data
+    regfile.write_en(w)    := rob.io.commit(w).pop && regfile_utils.writable(rob.io.commit(w).rd)
+    regfile.write_preg(w)  := rob.io.commit(w).rd
+    regfile.write_data(w)  := rob.io.commit(w).data
   }
 
-  // BPU update
   val bpu_update_valid        = WireDefault(false.B)
   val bpu_update_pc           = WireDefault(0.U(p(XLen).W))
   val bpu_update_target       = WireDefault(0.U(p(XLen).W))
@@ -440,7 +404,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   bpu.update.ghr_snapshot := bpu_update_ghr_snapshot
   bpu.update.mispredict   := bpu_update_mispredict
 
-  // Counters / CSR counters
   val cycle_count      = RegInit(0.U(64.W))
   val instret_count    = RegInit(0.U(64.W))
   val commit_pop_count = PopCount(rob.io.commit.map(_.pop))
@@ -456,7 +419,6 @@ class RiscCore(implicit p: Parameters) extends Module {
     csr.irq.ext_irq   := RegNext(irq.ext_irq, false.B)
   }
 
-  // Debug outputs
   val debug_cycle_count   = IO(Output(UInt(64.W)))
   val debug_instret_count = IO(Output(UInt(64.W)))
 
@@ -508,7 +470,6 @@ class RiscCore(implicit p: Parameters) extends Module {
     .map(w => rob.io.commit(w).pop && (rob.io.commit(w).commit_barrier || (!rob.io.commit(w).is_branch && rob.io.commit(w).bpu_pred_taken)) && rob.io.commit(w).flush_pipeline)
     .reduce(_ || _)
   debug_branch_commit  := PopCount((0 until p(IssueWidth)).map(w => rob.io.commit(w).pop && rob.io.commit(w).commit_barrier))
-
   debug_flush_cycle    := global_flush
   debug_rob_empty      := rob.io.empty
   debug_issue_count    := PopCount(lane_valid)
