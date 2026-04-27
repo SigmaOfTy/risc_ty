@@ -5,7 +5,7 @@ import vopts.mem.cache.{ CacheIO, CacheOp }
 import chisel3._
 import chisel3.util.{ MuxCase, Cat, Fill, log2Ceil }
 
-class LsuCtrl extends Bundle {
+class LsuCtrl(implicit p: Parameters) extends Bundle {
   val is_byte     = Bool()
   val is_half     = Bool()
   val is_word     = Bool()

@@ -15,7 +15,7 @@ abstract class Scheduler(implicit p: Parameters) extends Module {
 object Scheduler {
   def apply()(implicit p: Parameters): Scheduler =
     p(ScheduleType) match {
-      case "in-order"   => Module(new Inorder)
+      // case "in-order"   => Module(new Inorder)
       case "scoreboard" => Module(new Scoreboard)
       // case "tomasulo"   => Module(new Tomasulo)
       case other        => throw new IllegalArgumentException(s"Unknown ScheduleType: $other")
