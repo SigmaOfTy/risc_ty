@@ -24,7 +24,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   private val FuTypeW = log2Ceil(arch.configs.proto.FunctionalUnitType.values.size)
 
   val regfile_utils = RegfileUtilsFactory.getOrThrow(p(ISA).name)
-  val bru_utils     = BruUtilsFactory.getOrThrow(p(ISA).name)
 
   val imem = IO(new CacheReadOnlyIO(Vec(p(IssueWidth), UInt(p(ILen).W)), p(XLen)))
   val dmem = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
@@ -111,7 +110,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   for (i <- loadFUs.indices) {
     memory_arbiter.ld_mem(i) <> loadFUs(i).mem
     memory_arbiter.ld_mmio(i) <> loadFUs(i).mmio
-
     loadFUs(i).sbFwd <> store_buffer.io.fwd(i)
   }
 
@@ -136,7 +134,8 @@ class RiscCore(implicit p: Parameters) extends Module {
   }
 
   // BPU query / frontend redirect
-  val bpuQueryBase = ifu.fetch_pc & ~(p(IssueWidth) * (p(ILen) / 8) - 1).U(p(XLen).W)
+  val bpuQueryBase =
+    ifu.fetch_pc & ~(p(IssueWidth) * (p(ILen) / 8) - 1).U(p(XLen).W)
 
   for (w <- 0 until p(IssueWidth))
     bpu.query_pc(w) := bpuQueryBase + (w * (p(ILen) / 8)).U
@@ -164,7 +163,8 @@ class RiscCore(implicit p: Parameters) extends Module {
   val is_store = Wire(Vec(p(IssueWidth), Bool()))
   val is_mem   = Wire(Vec(p(IssueWidth), Bool()))
 
-  val inst_type = Wire(Vec(p(IssueWidth), UInt(FuTypeW.W)))
+  val decoded_rd_valid = Wire(Vec(p(IssueWidth), Bool()))
+  val inst_type        = Wire(Vec(p(IssueWidth), UInt(FuTypeW.W)))
 
   for (w <- 0 until p(IssueWidth)) {
     decoders(w).instr   := ifu.if_instr(w)
@@ -184,6 +184,10 @@ class RiscCore(implicit p: Parameters) extends Module {
     is_load(w)  := decoders(w).decoded.load
     is_store(w) := decoders(w).decoded.store
     is_mem(w)   := decoders(w).decoded.load || decoders(w).decoded.store
+
+    decoded_rd_valid(w) :=
+      decoders(w).decoded.rd_valid &&
+        regfile_utils.writable(rds(w))
 
     inst_type(w) := MuxCase(
       FUNCTIONAL_UNIT_TYPE_ALU.index.U(FuTypeW.W),
@@ -284,18 +288,6 @@ class RiscCore(implicit p: Parameters) extends Module {
     store_buffer.io.commit(w).bits  := rob.io.commit(w).sq_idx
   }
 
-  // Commit-time branch classification for BPU update
-  val commit_is_cond_branch = Wire(Vec(p(IssueWidth), Bool()))
-
-  for (w <- 0 until p(IssueWidth)) {
-    val dec = Module(new Decoder)
-    dec.instr := rob.io.commit(w).instr
-
-    val c_bru_ctrl = bru_utils.decode(dec.decoded.uop)
-
-    commit_is_cond_branch(w) := dec.decoded.bru && !c_bru_ctrl.is_jump
-  }
-
   // Commit bypass into newly dispatched operands
   val rs1_commit_match = Wire(Vec(p(IssueWidth), Bool()))
   val rs2_commit_match = Wire(Vec(p(IssueWidth), Bool()))
@@ -348,14 +340,21 @@ class RiscCore(implicit p: Parameters) extends Module {
     dis.bits.fu_id    := 0.U
     dis.bits.uop      := decoders(w).decoded.uop
     dis.bits.imm_type := decoders(w).decoded.imm_type
-    dis.bits.rs1      := rs1s(w)
-    dis.bits.rs2      := rs2s(w)
-    dis.bits.rd       := Mux(decoders(w).decoded.regwrite && regfile_utils.writable(rds(w)), rds(w), 0.U)
+
+    dis.bits.rs1 := rs1s(w)
+    dis.bits.rs2 := rs2s(w)
+    dis.bits.rd  := Mux(decoded_rd_valid(w), rds(w), 0.U)
+
+    dis.bits.rs1_valid := decoders(w).decoded.rs1_valid
+    dis.bits.rs2_valid := decoders(w).decoded.rs2_valid
+    dis.bits.rd_valid  := decoded_rd_valid(w)
+
     dis.bits.rs1_data := rs1_fully_bypassed
     dis.bits.rs2_data := rs2_fully_bypassed
-    dis.bits.rob_tag  := rob.io.enq(w).rob_tag
-    dis.bits.sq_idx   := sq_idx_for_lane(w)
-    dis.bits.sq_seq   := sq_seq_for_lane(w)
+
+    dis.bits.rob_tag := rob.io.enq(w).rob_tag
+    dis.bits.sq_idx  := sq_idx_for_lane(w)
+    dis.bits.sq_seq  := sq_seq_for_lane(w)
 
     lane_valid(w) := dis.fire
   }
@@ -365,11 +364,12 @@ class RiscCore(implicit p: Parameters) extends Module {
     rob.io.enq(w).valid            := lane_valid(w)
     rob.io.enq(w).pc               := ifu.if_pc(w)
     rob.io.enq(w).instr            := ifu.if_instr(w)
-    rob.io.enq(w).rd               := Mux(decoders(w).decoded.regwrite && regfile_utils.writable(rds(w)), rds(w), 0.U)
+    rob.io.enq(w).rd               := Mux(decoded_rd_valid(w), rds(w), 0.U)
     rob.io.enq(w).pd               := 0.U
     rob.io.enq(w).old_pd           := 0.U
     rob.io.enq(w).is_branch        := decoders(w).decoded.bru
     rob.io.enq(w).is_store         := is_store(w)
+    rob.io.enq(w).commit_barrier   := decoders(w).decoded.commit_barrier
     rob.io.enq(w).bpu_pred_taken   := ifu.if_bpu_pred_taken(w)
     rob.io.enq(w).bpu_pred_target  := ifu.if_bpu_pred_target(w)
     rob.io.enq(w).bpu_pht_index    := ifu.if_bpu_pht_index(w)
@@ -456,7 +456,7 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   for (w <- p(IssueWidth) - 1 to 0 by -1) {
     val is_bru_commit           = rob.io.commit(w).is_branch
-    val is_cond_branch_commit   = commit_is_cond_branch(w)
+    val is_cond_branch_commit   = rob.io.commit(w).commit_barrier
     val mispredicted_non_branch = !is_bru_commit && rob.io.commit(w).bpu_pred_taken
 
     when(rob.io.commit(w).pop && (is_cond_branch_commit || mispredicted_non_branch)) {
@@ -546,13 +546,16 @@ class RiscCore(implicit p: Parameters) extends Module {
     (0 until p(IssueWidth))
       .map(w =>
         rob.io.commit(w).pop &&
-          (commit_is_cond_branch(w) || (!rob.io.commit(w).is_branch && rob.io.commit(w).bpu_pred_taken)) &&
+          (
+            rob.io.commit(w).commit_barrier ||
+              (!rob.io.commit(w).is_branch && rob.io.commit(w).bpu_pred_taken)
+          ) &&
           rob.io.commit(w).flush_pipeline
       )
       .reduce(_ || _)
 
   debug_branch_commit :=
-    PopCount((0 until p(IssueWidth)).map(w => rob.io.commit(w).pop && commit_is_cond_branch(w)))
+    PopCount((0 until p(IssueWidth)).map(w => rob.io.commit(w).pop && rob.io.commit(w).commit_barrier))
 
   debug_flush_cycle    := global_flush
   debug_rob_empty      := rob.io.empty

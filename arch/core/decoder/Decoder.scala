@@ -11,6 +11,12 @@ class DecodedOutput(implicit p: Parameters) extends Bundle {
   val regwrite = Bool()
   val imm_type = UInt(imm_utils.immTypeWidth.W)
 
+  val rs1_valid = Bool()
+  val rs2_valid = Bool()
+  val rd_valid  = Bool()
+
+  val commit_barrier = Bool()
+
   val alu   = Bool()
   val mult  = Bool()
   val div   = Bool()

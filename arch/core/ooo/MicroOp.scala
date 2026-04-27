@@ -18,9 +18,14 @@ class MicroOp(implicit p: Parameters) extends Bundle {
   val uop      = UInt(p(MicroOpWidth).W)
   val imm_type = UInt(imm_utils.immTypeWidth.W)
 
-  val rs1      = UInt(log2Ceil(p(NumArchRegs)).W)
-  val rs2      = UInt(log2Ceil(p(NumArchRegs)).W)
-  val rd       = UInt(log2Ceil(p(NumArchRegs)).W)
+  val rs1 = UInt(log2Ceil(p(NumArchRegs)).W)
+  val rs2 = UInt(log2Ceil(p(NumArchRegs)).W)
+  val rd  = UInt(log2Ceil(p(NumArchRegs)).W)
+
+  val rs1_valid = Bool()
+  val rs2_valid = Bool()
+  val rd_valid  = Bool()
+
   val rs1_data = UInt(p(XLen).W)
   val rs2_data = UInt(p(XLen).W)
 
