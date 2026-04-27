@@ -74,17 +74,17 @@ class RiscCore(implicit p: Parameters) extends Module {
     }
   }
 
-  val loadFUs  = fus.collect { case l: LoadFU => l }
-  val storeFUs = fus.collect { case s: StoreFU => s }
-  val brus     = fus.collect { case b: BruFU => b }
-  val csrs     = fus.collect { case c: CsrFU => c }
+  val ldus = fus.collect { case l: LoadFU => l }
+  val stus = fus.collect { case s: StoreFU => s }
+  val brus = fus.collect { case b: BruFU => b }
+  val csrs = fus.collect { case c: CsrFU => c }
 
-  if (loadFUs.isEmpty) throw new Exception("LoadFU is mandatory but missing from configuration!")
-  if (storeFUs.isEmpty) throw new Exception("StoreFU is mandatory but missing from configuration!")
+  if (ldus.isEmpty) throw new Exception("LoadFU is mandatory but missing from configuration!")
+  if (stus.isEmpty) throw new Exception("StoreFU is mandatory but missing from configuration!")
   if (brus.isEmpty) throw new Exception("BRU Unit is mandatory but missing from configuration!")
   if (csrs.size > 1) throw new Exception("There should be only one CSR Unit")
 
-  val store_buffer = Module(new StoreBuffer(loadFUs.size, storeFUs.size))
+  val store_buffer = Module(new StoreBuffer(ldus.size, stus.size))
 
   // Commit redirect / global flush
   val is_flush = Wire(Vec(p(IssueWidth), Bool()))
@@ -92,8 +92,7 @@ class RiscCore(implicit p: Parameters) extends Module {
     is_flush(w) := rob.io.commit(w).pop && rob.io.commit(w).flush_pipeline
 
   val commit_flush_pipeline = is_flush.reduce(_ || _)
-  val commit_flush_target   =
-    Mux1H(is_flush.zipWithIndex.map { case (f, w) => f -> rob.io.commit(w).flush_target })
+  val commit_flush_target   = Mux1H(is_flush.zipWithIndex.map { case (f, w) => f -> rob.io.commit(w).flush_target })
 
   val async_trap_req =
     if (csrs.nonEmpty) csrs.map(c => c.trap_request && !c.is_busy).foldLeft(false.B)(_ || _)
@@ -107,14 +106,14 @@ class RiscCore(implicit p: Parameters) extends Module {
   val redirect_pc  = Mux(async_trap_req, async_trap_tgt, commit_flush_target)
 
   // Memory path
-  for (i <- loadFUs.indices) {
-    memory_arbiter.ld_mem(i) <> loadFUs(i).mem
-    memory_arbiter.ld_mmio(i) <> loadFUs(i).mmio
-    loadFUs(i).sbFwd <> store_buffer.io.fwd(i)
+  for (i <- ldus.indices) {
+    memory_arbiter.ld_mem(i) <> ldus(i).mem
+    memory_arbiter.ld_mmio(i) <> ldus(i).mmio
+    ldus(i).sbFwd <> store_buffer.io.fwd(i)
   }
 
-  for (i <- storeFUs.indices)
-    store_buffer.io.write(i) := storeFUs(i).sbWrite
+  for (i <- stus.indices)
+    store_buffer.io.write(i) := stus(i).sbWrite
 
   memory_arbiter.store_mem <> store_buffer.io.mem
   memory_arbiter.store_mmio <> store_buffer.io.mmio
@@ -134,8 +133,7 @@ class RiscCore(implicit p: Parameters) extends Module {
   }
 
   // BPU query / frontend redirect
-  val bpuQueryBase =
-    ifu.fetch_pc & ~(p(IssueWidth) * p(BytesPerInstr) - 1).U(p(XLen).W)
+  val bpuQueryBase = ifu.fetch_pc & ~(p(IssueWidth) * p(BytesPerInstr) - 1).U(p(XLen).W)
 
   for (w <- 0 until p(IssueWidth))
     bpu.query_pc(w) := bpuQueryBase + (w * p(PCStep)).U
@@ -207,13 +205,7 @@ class RiscCore(implicit p: Parameters) extends Module {
   kill_mask(0) := false.B
 
   for (w <- 1 until p(IssueWidth))
-    kill_mask(w) :=
-      kill_mask(w - 1) ||
-        (
-          ifu.if_valid(w - 1) &&
-            ifu.if_bpu_pred_taken(w - 1) &&
-            ifu.if_pc(w) === (ifu.if_pc(w - 1) + p(PCStep).U)
-        )
+    kill_mask(w) := kill_mask(w - 1) || (ifu.if_valid(w - 1) && ifu.if_bpu_pred_taken(w - 1) && ifu.if_pc(w) === (ifu.if_pc(w - 1) + p(PCStep).U))
 
   // Store-buffer allocation capacity
   val possibleStoreBeforeOrAt =
@@ -221,10 +213,7 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   for (w <- 0 until p(IssueWidth))
     possibleStoreBeforeOrAt(w) := PopCount((0 to w).map { v =>
-      ifu.if_valid(v) &&
-      decoders(v).decoded.store &&
-      !kill_mask(v) &&
-      !global_flush
+      ifu.if_valid(v) && decoders(v).decoded.store && !kill_mask(v) && !global_flush
     })
 
   val lane_base_req_ok = Wire(Vec(p(IssueWidth), Bool()))
@@ -232,38 +221,20 @@ class RiscCore(implicit p: Parameters) extends Module {
   val core_valid_req   = Wire(Vec(p(IssueWidth), Bool()))
 
   for (w <- 0 until p(IssueWidth)) {
-    val sqSlotOk =
-      !is_store(w) || possibleStoreBeforeOrAt(w) <= store_buffer.io.freeCount
-
-    lane_base_req_ok(w) :=
-      ifu.if_valid(w) &&
-        decoders(w).decoded.legal &&
-        !global_flush &&
-        !kill_mask(w) &&
-        sqSlotOk &&
-        rob.io.enq(w).ready
+    val sqSlotOk = !is_store(w) || possibleStoreBeforeOrAt(w) <= store_buffer.io.freeCount
+    lane_base_req_ok(w) := ifu.if_valid(w) && decoders(w).decoded.legal && !global_flush && !kill_mask(w) && sqSlotOk && rob.io.enq(w).ready
   }
 
   lane_prefix_ok(0) := true.B
 
   for (w <- 1 until p(IssueWidth)) {
-    val olderLaneMayBeSkipped =
-      !ifu.if_valid(w - 1) ||
-        kill_mask(w - 1) ||
-        global_flush
-
-    val olderLaneCanBePresented =
-      lane_base_req_ok(w - 1)
-
-    lane_prefix_ok(w) :=
-      lane_prefix_ok(w - 1) &&
-        (olderLaneMayBeSkipped || olderLaneCanBePresented)
+    val olderLaneMayBeSkipped   = !ifu.if_valid(w - 1) || kill_mask(w - 1) || global_flush
+    val olderLaneCanBePresented = lane_base_req_ok(w - 1)
+    lane_prefix_ok(w) := lane_prefix_ok(w - 1) && (olderLaneMayBeSkipped || olderLaneCanBePresented)
   }
 
   for (w <- 0 until p(IssueWidth))
-    core_valid_req(w) :=
-      lane_base_req_ok(w) &&
-        lane_prefix_ok(w)
+    core_valid_req(w) := lane_base_req_ok(w) && lane_prefix_ok(w)
 
   // Scheduler dispatch handshake
   val lane_valid = Wire(Vec(p(IssueWidth), Bool()))
@@ -291,11 +262,8 @@ class RiscCore(implicit p: Parameters) extends Module {
 
     val allocStore = lane_valid(w) && is_store(w)
 
-    sq_tail_after(w + 1) :=
-      Mux(allocStore, sqWrapAdd(sq_tail_after(w), 1.U), sq_tail_after(w))
-
-    sq_seq_after(w + 1) :=
-      sq_seq_after(w) + allocStore.asUInt
+    sq_tail_after(w + 1) := Mux(allocStore, sqWrapAdd(sq_tail_after(w), 1.U), sq_tail_after(w))
+    sq_seq_after(w + 1)  := sq_seq_after(w) + allocStore.asUInt
   }
 
   for (w <- 0 until p(IssueWidth)) {
@@ -318,68 +286,42 @@ class RiscCore(implicit p: Parameters) extends Module {
   val rs2_commit_data  = Wire(Vec(p(IssueWidth), UInt(p(XLen).W)))
 
   for (w <- 0 until p(IssueWidth)) {
-    val match1 =
-      (0 until p(IssueWidth)).map(cw =>
-        rob.io.commit(cw).pop &&
-          rob.io.commit(cw).rd === rs1s(w) &&
-          rs1s(w) =/= 0.U
-      )
-
+    val match1 = (0 until p(IssueWidth)).map(cw => rob.io.commit(cw).pop && rob.io.commit(cw).rd === rs1s(w) && rs1s(w) =/= 0.U)
     rs1_commit_match(w) := match1.reduce(_ || _)
     rs1_commit_data(w)  := Mux1H(match1, rob.io.commit.map(_.data))
 
-    val match2 =
-      (0 until p(IssueWidth)).map(cw =>
-        rob.io.commit(cw).pop &&
-          rob.io.commit(cw).rd === rs2s(w) &&
-          rs2s(w) =/= 0.U
-      )
-
+    val match2 = (0 until p(IssueWidth)).map(cw => rob.io.commit(cw).pop && rob.io.commit(cw).rd === rs2s(w) && rs2s(w) =/= 0.U)
     rs2_commit_match(w) := match2.reduce(_ || _)
     rs2_commit_data(w)  := Mux1H(match2, rob.io.commit.map(_.data))
   }
 
   // Drive scheduler dispatch payloads
   for (w <- 0 until p(IssueWidth)) {
-    val rs1_bypassed =
-      Mux(rob.io.rs1_bypass(w).valid, rob.io.rs1_bypass(w).data, regfile.rs1_data(w))
-
-    val rs2_bypassed =
-      Mux(rob.io.rs2_bypass(w).valid, rob.io.rs2_bypass(w).data, regfile.rs2_data(w))
-
-    val rs1_fully_bypassed =
-      Mux(rs1_commit_match(w), rs1_commit_data(w), rs1_bypassed)
-
-    val rs2_fully_bypassed =
-      Mux(rs2_commit_match(w), rs2_commit_data(w), rs2_bypassed)
+    val rs1_bypassed       = Mux(rob.io.rs1_bypass(w).valid, rob.io.rs1_bypass(w).data, regfile.rs1_data(w))
+    val rs2_bypassed       = Mux(rob.io.rs2_bypass(w).valid, rob.io.rs2_bypass(w).data, regfile.rs2_data(w))
+    val rs1_fully_bypassed = Mux(rs1_commit_match(w), rs1_commit_data(w), rs1_bypassed)
+    val rs2_fully_bypassed = Mux(rs2_commit_match(w), rs2_commit_data(w), rs2_bypassed)
 
     val dis = scheduler.dis_reqs(w)
-
-    dis.valid := core_valid_req(w)
-
-    dis.bits.pc       := ifu.if_pc(w)
-    dis.bits.instr    := ifu.if_instr(w)
-    dis.bits.fu_type  := inst_type(w)
-    dis.bits.fu_id    := 0.U
-    dis.bits.uop      := decoders(w).decoded.uop
-    dis.bits.imm_type := decoders(w).decoded.imm_type
-
-    dis.bits.rs1 := rs1s(w)
-    dis.bits.rs2 := rs2s(w)
-    dis.bits.rd  := Mux(decoded_rd_valid(w), rds(w), 0.U)
-
+    dis.valid          := core_valid_req(w)
+    dis.bits.pc        := ifu.if_pc(w)
+    dis.bits.instr     := ifu.if_instr(w)
+    dis.bits.fu_type   := inst_type(w)
+    dis.bits.fu_id     := 0.U
+    dis.bits.uop       := decoders(w).decoded.uop
+    dis.bits.imm_type  := decoders(w).decoded.imm_type
+    dis.bits.rs1       := rs1s(w)
+    dis.bits.rs2       := rs2s(w)
+    dis.bits.rd        := Mux(decoded_rd_valid(w), rds(w), 0.U)
     dis.bits.rs1_valid := decoders(w).decoded.rs1_valid
     dis.bits.rs2_valid := decoders(w).decoded.rs2_valid
     dis.bits.rd_valid  := decoded_rd_valid(w)
-
-    dis.bits.rs1_data := rs1_fully_bypassed
-    dis.bits.rs2_data := rs2_fully_bypassed
-
-    dis.bits.rob_tag := rob.io.enq(w).rob_tag
-    dis.bits.sq_idx  := sq_idx_for_lane(w)
-    dis.bits.sq_seq  := sq_seq_for_lane(w)
-
-    lane_valid(w) := dis.fire
+    dis.bits.rs1_data  := rs1_fully_bypassed
+    dis.bits.rs2_data  := rs2_fully_bypassed
+    dis.bits.rob_tag   := rob.io.enq(w).rob_tag
+    dis.bits.sq_idx    := sq_idx_for_lane(w)
+    dis.bits.sq_seq    := sq_seq_for_lane(w)
+    lane_valid(w)      := dis.fire
   }
 
   // ROB enqueue follows scheduler acceptance
@@ -402,10 +344,7 @@ class RiscCore(implicit p: Parameters) extends Module {
 
   // IFU consumption
   for (w <- 0 until p(IssueWidth)) {
-    val consumeThisLane =
-      global_flush ||
-        kill_mask(w) ||
-        lane_valid(w)
+    val consumeThisLane = global_flush || kill_mask(w) || lane_valid(w)
 
     if (w == 0) {
       ifu_fire(w) := ifu.if_valid(w) && consumeThisLane
@@ -565,20 +504,10 @@ class RiscCore(implicit p: Parameters) extends Module {
   val debug_frontend_stall = IO(Output(Bool()))
   val debug_backend_stall  = IO(Output(Bool()))
 
-  debug_bpu_mispredict :=
-    (0 until p(IssueWidth))
-      .map(w =>
-        rob.io.commit(w).pop &&
-          (
-            rob.io.commit(w).commit_barrier ||
-              (!rob.io.commit(w).is_branch && rob.io.commit(w).bpu_pred_taken)
-          ) &&
-          rob.io.commit(w).flush_pipeline
-      )
-      .reduce(_ || _)
-
-  debug_branch_commit :=
-    PopCount((0 until p(IssueWidth)).map(w => rob.io.commit(w).pop && rob.io.commit(w).commit_barrier))
+  debug_bpu_mispredict := (0 until p(IssueWidth))
+    .map(w => rob.io.commit(w).pop && (rob.io.commit(w).commit_barrier || (!rob.io.commit(w).is_branch && rob.io.commit(w).bpu_pred_taken)) && rob.io.commit(w).flush_pipeline)
+    .reduce(_ || _)
+  debug_branch_commit  := PopCount((0 until p(IssueWidth)).map(w => rob.io.commit(w).pop && rob.io.commit(w).commit_barrier))
 
   debug_flush_cycle    := global_flush
   debug_rob_empty      := rob.io.empty
