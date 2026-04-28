@@ -11,6 +11,6 @@ trait DivUtils extends Utils {
 object DivUtilsFactory extends UtilsFactory[DivUtils]("Div")
 
 object DivInit {
-  val rv32iUtils  = RV32IDivUtils
-  val rv32imUtils = RV32IMDivUtils
+  val rv32iUtils  = riscv.RV32IDivUtils
+  val rv32imUtils = riscv.RV32IMDivUtils
 }

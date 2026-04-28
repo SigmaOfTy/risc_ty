@@ -24,7 +24,7 @@ abstract class Scheduler(implicit p: Parameters) extends Module {
   protected val fuTypes =
     p(FunctionalUnits).map(_.`type`.index.U(FuTypeW.W))
 
-  protected def isFuType(op: MicroOp, t: arch.configs.proto.FunctionalUnitType): Bool =
+  protected def isFuType(op: MicroOp, t: FunctionalUnitType): Bool =
     op.fu_type === t.index.U(FuTypeW.W)
 
   protected def isLoad(op: MicroOp): Bool =

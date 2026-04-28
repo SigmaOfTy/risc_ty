@@ -1,10 +1,10 @@
-package arch.core.div
+package arch.core.div.riscv
 
+import arch.core.div._
 import arch.configs._
-import chisel3._
-import chisel3.util.Fill
 import vopts.math.RestoringDivider
-import chisel3.util.BitPat
+import chisel3._
+import chisel3.util.{ Fill, BitPat }
 
 // Format: uop[7:2] = 0 | uop[1] = signed_bit | uop[0] = rem_bit
 trait RV32IMDivUOpConsts {
