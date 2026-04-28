@@ -4,77 +4,83 @@ import arch.configs._
 import arch.configs.proto.FunctionalUnitType._
 import vopts.mem.cache._
 import chisel3._
-import chisel3.util.{ RRArbiter, Queue, log2Ceil }
+import chisel3.util._
 
 class MemoryArbiter(implicit p: Parameters) extends Module {
   override def desiredName: String = s"${p(ISA).name}_memory_arbiter"
 
-  private def numLSUs =
-    p(FunctionalUnits).zipWithIndex
-      .filter(_._1.`type` == FUNCTIONAL_UNIT_TYPE_LSU)
-      .size
+  private val NumLDs  = p(FunctionalUnits).count(_.`type` == FUNCTIONAL_UNIT_TYPE_LD)
+  private val NumReqs = NumLDs + 1
+  private val TargetW = log2Ceil(NumReqs)
 
-  val lsu_mem  = IO(Vec(numLSUs, Flipped(new CacheIO(UInt(p(XLen).W), p(XLen)))))
-  val lsu_mmio = IO(Vec(numLSUs, Flipped(new CacheIO(UInt(p(XLen).W), p(XLen)))))
-  val mem      = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
-  val mmio     = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
+  val ld_mem  = IO(Vec(NumLDs, Flipped(new CacheIO(UInt(p(XLen).W), p(XLen)))))
+  val ld_mmio = IO(Vec(NumLDs, Flipped(new CacheIO(UInt(p(XLen).W), p(XLen)))))
 
-  // Memory request arbiter
-  val memReqArb = Module(new RRArbiter(chiselTypeOf(lsu_mem(0).req.bits), numLSUs))
-  for (i <- 0 until numLSUs) memReqArb.io.in(i) <> lsu_mem(i).req
+  val store_mem  = IO(Flipped(new CacheIO(UInt(p(XLen).W), p(XLen))))
+  val store_mmio = IO(Flipped(new CacheIO(UInt(p(XLen).W), p(XLen))))
 
-  val memRespQueue = Module(new Queue(UInt(log2Ceil(numLSUs).W), p(ROBSize)))
-  memReqArb.io.out.ready := mem.req.ready && memRespQueue.io.enq.ready
-  mem.req.valid          := memReqArb.io.out.valid && memRespQueue.io.enq.ready
-  mem.req.bits           := memReqArb.io.out.bits
+  val mem  = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
+  val mmio = IO(new CacheIO(UInt(p(XLen).W), p(XLen)))
 
-  memRespQueue.io.enq.valid := memReqArb.io.out.valid && mem.req.ready
-  memRespQueue.io.enq.bits  := memReqArb.io.chosen
+  val memArb  = Module(new RRArbiter(new CacheReq(UInt(p(XLen).W), p(XLen)), NumReqs))
+  val mmioArb = Module(new RRArbiter(new CacheReq(UInt(p(XLen).W), p(XLen)), NumReqs))
 
-  // Memory response demux
-  val memTarget = memRespQueue.io.deq.bits
-  for (i <- 0 until numLSUs) {
-    lsu_mem(i).resp.valid := mem.resp.valid && memRespQueue.io.deq.valid && (memTarget === i.U)
-    lsu_mem(i).resp.bits  := mem.resp.bits
+  val memRespQ  = Module(new Queue(UInt(TargetW.W), p(ROBSize), pipe = true, flow = true))
+  val mmioRespQ = Module(new Queue(UInt(TargetW.W), p(ROBSize), pipe = true, flow = true))
+
+  for (i <- 0 until NumLDs) memArb.io.in(i) <> ld_mem(i).req
+  memArb.io.in(NumLDs) <> store_mem.req
+
+  mem.req.valid       := memArb.io.out.valid && memRespQ.io.enq.ready
+  mem.req.bits        := memArb.io.out.bits
+  memArb.io.out.ready := mem.req.ready && memRespQ.io.enq.ready
+
+  memRespQ.io.enq.valid := memArb.io.out.fire
+  memRespQ.io.enq.bits  := memArb.io.chosen
+
+  val memTarget    = memRespQ.io.deq.bits
+  val memRespValid = mem.resp.valid && memRespQ.io.deq.valid
+
+  for (i <- 0 until NumLDs) {
+    ld_mem(i).resp.valid := memRespValid && memTarget === i.U
+    ld_mem(i).resp.bits  := mem.resp.bits
   }
 
-  mem.resp.ready            := false.B
-  memRespQueue.io.deq.ready := false.B
-  when(memRespQueue.io.deq.valid) {
-    for (i <- 0 until numLSUs)
-      when(memTarget === i.U) {
-        val ready = lsu_mem(i).resp.ready
-        mem.resp.ready            := ready
-        memRespQueue.io.deq.ready := mem.resp.valid && ready
-      }
+  store_mem.resp.valid := memRespValid && memTarget === NumLDs.U
+  store_mem.resp.bits  := mem.resp.bits
+
+  val memLdReadyVec = Wire(Vec(NumLDs, Bool()))
+  for (i <- 0 until NumLDs) memLdReadyVec(i) := ld_mem(i).resp.ready
+
+  val memTargetReady = Mux(memTarget === NumLDs.U, store_mem.resp.ready, Mux1H((0 until NumLDs).map(i => (memTarget === i.U) -> memLdReadyVec(i))))
+  mem.resp.ready        := memRespQ.io.deq.valid && memTargetReady
+  memRespQ.io.deq.ready := mem.resp.valid && memTargetReady
+
+  for (i <- 0 until NumLDs) mmioArb.io.in(i) <> ld_mmio(i).req
+  mmioArb.io.in(NumLDs) <> store_mmio.req
+
+  mmio.req.valid       := mmioArb.io.out.valid && mmioRespQ.io.enq.ready
+  mmio.req.bits        := mmioArb.io.out.bits
+  mmioArb.io.out.ready := mmio.req.ready && mmioRespQ.io.enq.ready
+
+  mmioRespQ.io.enq.valid := mmioArb.io.out.fire
+  mmioRespQ.io.enq.bits  := mmioArb.io.chosen
+
+  val mmioTarget    = mmioRespQ.io.deq.bits
+  val mmioRespValid = mmio.resp.valid && mmioRespQ.io.deq.valid
+
+  for (i <- 0 until NumLDs) {
+    ld_mmio(i).resp.valid := mmioRespValid && mmioTarget === i.U
+    ld_mmio(i).resp.bits  := mmio.resp.bits
   }
 
-  // MMIO arbiter
-  val mmioReqArb = Module(new RRArbiter(chiselTypeOf(lsu_mmio(0).req.bits), numLSUs))
-  for (i <- 0 until numLSUs) mmioReqArb.io.in(i) <> lsu_mmio(i).req
+  store_mmio.resp.valid := mmioRespValid && mmioTarget === NumLDs.U
+  store_mmio.resp.bits  := mmio.resp.bits
 
-  val mmioRespQueue = Module(new Queue(UInt(log2Ceil(numLSUs).W), p(ROBSize)))
-  mmioReqArb.io.out.ready := mmio.req.ready && mmioRespQueue.io.enq.ready
-  mmio.req.valid          := mmioReqArb.io.out.valid && mmioRespQueue.io.enq.ready
-  mmio.req.bits           := mmioReqArb.io.out.bits
+  val mmioLdReadyVec = Wire(Vec(NumLDs, Bool()))
+  for (i <- 0 until NumLDs) mmioLdReadyVec(i) := ld_mmio(i).resp.ready
 
-  mmioRespQueue.io.enq.valid := mmioReqArb.io.out.valid && mmio.req.ready
-  mmioRespQueue.io.enq.bits  := mmioReqArb.io.chosen
-
-  val mmioTarget = mmioRespQueue.io.deq.bits
-  for (i <- 0 until numLSUs) {
-    lsu_mmio(i).resp.valid := mmio.resp.valid && mmioRespQueue.io.deq.valid && (mmioTarget === i.U)
-    lsu_mmio(i).resp.bits  := mmio.resp.bits
-  }
-
-  mmio.resp.ready            := false.B
-  mmioRespQueue.io.deq.ready := false.B
-  when(mmioRespQueue.io.deq.valid) {
-    for (i <- 0 until numLSUs)
-      when(mmioTarget === i.U) {
-        val ready = lsu_mmio(i).resp.ready
-        mmio.resp.ready            := ready
-        mmioRespQueue.io.deq.ready := mmio.resp.valid && ready
-      }
-  }
+  val mmioTargetReady = Mux(mmioTarget === NumLDs.U, store_mmio.resp.ready, Mux1H((0 until NumLDs).map(i => (mmioTarget === i.U) -> mmioLdReadyVec(i))))
+  mmio.resp.ready        := mmioRespQ.io.deq.valid && mmioTargetReady
+  mmioRespQ.io.deq.ready := mmio.resp.valid && mmioTargetReady
 }
