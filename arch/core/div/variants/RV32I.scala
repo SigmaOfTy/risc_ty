@@ -1,5 +1,6 @@
-package arch.core.div
+package arch.core.div.riscv
 
+import arch.core.div._
 import arch.configs._
 import chisel3._
 

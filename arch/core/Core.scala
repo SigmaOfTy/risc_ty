@@ -2,7 +2,6 @@ package arch.core
 
 import ifu._
 import decoder._
-import imm._
 import bru._
 import regfile._
 import bpu._
@@ -34,7 +33,6 @@ class RiscCore(implicit p: Parameters) extends Module {
   val ifu            = Module(new Ifu)
   val decoders       = Seq.fill(p(IssueWidth))(Module(new Decoder))
   val regfile        = Module(new Regfile)
-  val imm_gens       = Seq.fill(p(IssueWidth))(Module(new ImmGen))
   val scheduler      = Scheduler()
   val rob            = Module(new ReorderBuffer)
   val memory_arbiter = Module(new MemoryArbiter)
@@ -152,9 +150,7 @@ class RiscCore(implicit p: Parameters) extends Module {
   val inst_type        = Wire(Vec(p(IssueWidth), UInt(FuTypeW.W)))
 
   for (w <- 0 until p(IssueWidth)) {
-    decoders(w).instr   := ifu.if_instr(w)
-    imm_gens(w).instr   := ifu.if_instr(w)
-    imm_gens(w).immType := decoders(w).decoded.imm_type
+    decoders(w).instr := ifu.if_instr(w)
 
     rs1s(w) := regfile_utils.getRs1(ifu.if_instr(w))
     rs2s(w) := regfile_utils.getRs2(ifu.if_instr(w))
